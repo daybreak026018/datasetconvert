@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 
 
 @dataclass
@@ -34,6 +34,20 @@ class BaseParser:
 
     def parse(self, input_dir: Path) -> List[ImageAnnotation]:
         raise NotImplementedError
+    
+    def parse_with_progress(self, input_dir: Path, 
+                           progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                           status_callback: Optional[Callable[[str], None]] = None,
+                           cancel_callback: Optional[Callable[[], bool]] = None) -> List[ImageAnnotation]:
+        """带进度回调的解析方法，子类可以重写以提供进度支持"""
+        return self.parse(input_dir)
 
     def export(self, annotations: List[ImageAnnotation], output_dir: Path) -> None:
         raise NotImplementedError
+    
+    def export_with_progress(self, annotations: List[ImageAnnotation], output_dir: Path,
+                            progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                            status_callback: Optional[Callable[[str], None]] = None,
+                            cancel_callback: Optional[Callable[[], bool]] = None) -> None:
+        """带进度回调的导出方法，子类可以重写以提供进度支持"""
+        self.export(annotations, output_dir)

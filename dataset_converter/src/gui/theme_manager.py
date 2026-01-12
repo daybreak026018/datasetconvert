@@ -12,12 +12,25 @@ class ThemeManager(QObject):
     """主题管理器"""
     
     theme_changed = pyqtSignal(str)  # 主题改变信号
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        """单例模式"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
     
     def __init__(self):
+        # 避免重复初始化
+        if ThemeManager._initialized:
+            return
+        
         super().__init__()
         self.settings = QSettings("DataForge", "Theme")
         self.current_theme = self.settings.value("current_theme", "light")
         self.themes = self._load_themes()
+        ThemeManager._initialized = True
     
     def _load_themes(self) -> Dict[str, Dict[str, Any]]:
         """加载主题配置"""
@@ -577,5 +590,10 @@ class ThemeManager(QObject):
         """
 
 
-# 全局主题管理器实例
-theme_manager = ThemeManager()
+# 全局主题管理器实例 - 使用函数获取以确保线程安全
+def get_theme_manager():
+    """获取主题管理器实例"""
+    return ThemeManager()
+
+# 为了向后兼容，保留全局变量
+theme_manager = get_theme_manager()

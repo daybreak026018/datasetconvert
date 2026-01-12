@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Callable
 
 from .base_parser import BaseParser, ImageAnnotation, BBox, Polygon
 from ..utils.file_utils import list_files_by_ext, find_image_by_stem
@@ -14,19 +14,11 @@ class YOLOSegParser(BaseParser):
     def set_label_map(self, mapping: Dict[str, int]):
         self._external_label_map = dict(mapping or {})
 
-    def parse(self, input_dir: Path) -> List[ImageAnnotation]:
-        """
-        解析标准目录结构的YOLO分割数据集:
-        dataset/
-        ├── images/
-        │   ├── train/
-        │   ├── test/
-        │   └── val/
-        └── labels/
-            ├── train/
-            ├── test/
-            └── val/
-        """
+    def parse_with_progress(self, input_dir: Path, 
+                           progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                           status_callback: Optional[Callable[[str], None]] = None,
+                           cancel_callback: Optional[Callable[[], bool]] = None) -> List[ImageAnnotation]:
+        """带进度回调的YOLO分割解析"""
         results: List[ImageAnnotation] = []
         id_to_label = {v: k for k, v in self._external_label_map.items()} if self._external_label_map else {}
         
@@ -37,111 +29,143 @@ class YOLOSegParser(BaseParser):
         if not images_dir.exists() or not labels_dir.exists():
             raise ValueError(f"数据集目录结构不正确。需要包含 'images' 和 'labels' 文件夹。\n当前目录: {input_dir}")
         
-        # 处理所有子集 (train, test, val)
+        # 收集所有标签文件
+        all_txt_files = []
         subsets = ["train", "test", "val"]
+        
+        if status_callback:
+            status_callback("扫描YOLO分割数据集文件...")
         
         for subset in subsets:
             img_subset_dir = images_dir / subset
             label_subset_dir = labels_dir / subset
             
-            # 如果子集目录不存在，跳过
             if not img_subset_dir.exists() or not label_subset_dir.exists():
                 continue
             
-            # 获取所有标签文件
             txt_files = list_files_by_ext(label_subset_dir, [".txt"])
-            
             for txt_file in txt_files:
-                stem = txt_file.stem
-                
-                # 在对应的图片目录中查找同名图片
-                img_file = self._find_image_in_dir(img_subset_dir, stem)
-                if img_file is None:
-                    continue
-                
-                try:
-                    with Image.open(img_file) as im:
-                        width, height = im.size
-                except Exception:
-                    width, height = 0, 0
-                
-                # 解析标注
-                boxes: List[BBox] = []
-                polygons: List[Polygon] = []
-                
-                try:
-                    for line in txt_file.read_text(encoding="utf-8").splitlines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                            
-                        parts = line.split()
-                        if len(parts) < 5:
-                            continue
-                            
-                        try:
-                            cid = int(parts[0])
-                            label = id_to_label.get(cid, str(cid))
-                            
-                            if len(parts) == 5:
-                                # 目标检测格式: class cx cy w h
-                                cx = float(parts[1])
-                                cy = float(parts[2])
-                                w = float(parts[3])
-                                h = float(parts[4])
-                                
-                                if width > 0 and height > 0:
-                                    box_w = w * width
-                                    box_h = h * height
-                                    x_center = cx * width
-                                    y_center = cy * height
-                                    xmin = int(round(x_center - box_w / 2.0))
-                                    ymin = int(round(y_center - box_h / 2.0))
-                                    xmax = int(round(x_center + box_w / 2.0))
-                                    ymax = int(round(y_center + box_h / 2.0))
-                                else:
-                                    xmin = ymin = xmax = ymax = 0
-                                    
-                                boxes.append(BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, label=label))
-                                
-                            else:
-                                # 分割格式: class x1 y1 x2 y2 ... xn yn
-                                coords = [float(x) for x in parts[1:]]
-                                if len(coords) % 2 == 0 and len(coords) >= 6:  # 至少3个点
-                                    polygons.append(Polygon(points=coords, label=label))
-                                    
-                        except ValueError:
-                            continue
-                except Exception:
-                    # 标注文件读取失败，跳过
-                    continue
-
-                results.append(ImageAnnotation(
-                    image_path=img_file, 
-                    width=width, 
-                    height=height, 
-                    boxes=boxes,
-                    polygons=polygons
-                ))
+                all_txt_files.append((txt_file, img_subset_dir))
+        
+        total_files = len(all_txt_files)
+        if total_files == 0:
+            return results
+        
+        # 处理文件
+        for i, (txt_file, img_subset_dir) in enumerate(all_txt_files):
+            # 检查是否取消
+            if cancel_callback and cancel_callback():
+                break
             
-        return results
-    
-    def _find_image_in_dir(self, img_dir: Path, stem: str) -> Path:
-        """在指定目录中查找同名图片文件"""
-        exts = [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
-        for ext in exts:
-            img_path = img_dir / f"{stem}{ext}"
-            if img_path.exists():
-                return img_path
-        return None
+            # 更新进度
+            if progress_callback:
+                progress_callback(i, total_files, f"解析 {txt_file.name}")
+            
+            stem = txt_file.stem
+            
+            # 在对应的图片目录中查找同名图片
+            img_file = self._find_image_in_dir(img_subset_dir, stem)
+            if img_file is None:
+                continue
+            
+            try:
+                with Image.open(img_file) as im:
+                    width, height = im.size
+            except Exception:
+                width, height = 0, 0
+            
+            # 解析标注
+            boxes: List[BBox] = []
+            polygons: List[Polygon] = []
+            
+            try:
+                for line in txt_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    parts = line.split()
+                    if len(parts) < 5:
+                        continue
+                        
+                    try:
+                        cid = int(parts[0])
+                        label = id_to_label.get(cid, str(cid))
+                        
+                        if len(parts) == 5:
+                            # 目标检测格式: class cx cy w h
+                            cx = float(parts[1])
+                            cy = float(parts[2])
+                            w = float(parts[3])
+                            h = float(parts[4])
+                            
+                            if width > 0 and height > 0:
+                                box_w = w * width
+                                box_h = h * height
+                                x_center = cx * width
+                                y_center = cy * height
+                                xmin = int(round(x_center - box_w / 2.0))
+                                ymin = int(round(y_center - box_h / 2.0))
+                                xmax = int(round(x_center + box_w / 2.0))
+                                ymax = int(round(y_center + box_h / 2.0))
+                            else:
+                                xmin = ymin = xmax = ymax = 0
+                                
+                            boxes.append(BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, label=label))
+                            
+                        else:
+                            # 分割格式: class x1 y1 x2 y2 ... xn yn
+                            coords = [float(x) for x in parts[1:]]
+                            if len(coords) % 2 == 0 and len(coords) >= 6:  # 至少3个点
+                                polygons.append(Polygon(points=coords, label=label))
+                                
+                    except ValueError:
+                        continue
+            except Exception:
+                # 标注文件读取失败，跳过
+                continue
 
-    def export(self, annotations: List[ImageAnnotation], output_dir: Path) -> None:
-        """导出为YOLO分割格式"""
+            results.append(ImageAnnotation(
+                image_path=img_file, 
+                width=width, 
+                height=height, 
+                boxes=boxes,
+                polygons=polygons
+            ))
+        
+        # 完成进度
+        if progress_callback:
+            progress_callback(total_files, total_files, "YOLO分割解析完成")
+        
+        return results
+
+    def parse(self, input_dir: Path) -> List[ImageAnnotation]:
+        """原始解析方法，保持向后兼容"""
+        return self.parse_with_progress(input_dir)
+
+    def export_with_progress(self, annotations: List[ImageAnnotation], output_dir: Path,
+                            progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                            status_callback: Optional[Callable[[str], None]] = None,
+                            cancel_callback: Optional[Callable[[], bool]] = None) -> None:
+        """带进度回调的YOLO分割导出"""
         output_dir.mkdir(parents=True, exist_ok=True)
         label_to_id: Dict[str, int] = dict(self._external_label_map)
         next_id = (max(label_to_id.values()) + 1) if label_to_id else 0
         
-        for ann in annotations:
+        total_annotations = len(annotations)
+        
+        if status_callback:
+            status_callback("导出YOLO分割格式...")
+        
+        for i, ann in enumerate(annotations):
+            # 检查是否取消
+            if cancel_callback and cancel_callback():
+                break
+            
+            # 更新进度
+            if progress_callback:
+                progress_callback(i, total_annotations, f"导出 {ann.image_path.name}")
+            
             # 跳过没有尺寸信息的标注（但允许只有多边形的情况）
             if ann.width <= 0 or ann.height <= 0:
                 # 如果有多边形但没有尺寸信息，使用默认尺寸
@@ -188,4 +212,24 @@ class YOLOSegParser(BaseParser):
             # 只有在有标注的情况下才写文件
             if lines:
                 out_fp.write_text("\n".join(lines), encoding="utf-8")
-                print(f"已生成文件: {out_fp} ({len(lines)} 行标注)")
+        
+        # 完成进度
+        if progress_callback:
+            progress_callback(total_annotations, total_annotations, "YOLO分割导出完成")
+
+    def export(self, annotations: List[ImageAnnotation], output_dir: Path) -> None:
+        """导出为YOLO分割格式"""
+        self.export_with_progress(annotations, output_dir)
+    
+    def _find_image_in_dir(self, img_dir: Path, stem: str) -> Path:
+        """在指定目录中查找同名图片文件"""
+        exts = [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
+        for ext in exts:
+            img_path = img_dir / f"{stem}{ext}"
+            if img_path.exists():
+                return img_path
+        return None
+
+    def export(self, annotations: List[ImageAnnotation], output_dir: Path) -> None:
+        """导出为YOLO分割格式"""
+        self.export_with_progress(annotations, output_dir)

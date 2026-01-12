@@ -360,8 +360,15 @@ class SettingsPanel(QWidget):
     
     def connect_signals(self):
         """连接信号"""
-        self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
-        theme_manager.theme_changed.connect(self.update_theme_preview)
+        try:
+            self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
+            # 安全地连接主题管理器信号
+            from .theme_manager import get_theme_manager
+            manager = get_theme_manager()
+            if manager and hasattr(manager, 'theme_changed'):
+                manager.theme_changed.connect(self.update_theme_preview)
+        except Exception as e:
+            print(f"连接信号失败: {e}")  # 调试用，实际部署时可以移除
     
     def load_settings(self):
         """加载设置"""

@@ -222,6 +222,12 @@ print('安装验证完成！')
 **Q: 统计图表中文显示为方块**
 **A**: 系统缺少中文字体，程序会自动尝试多种字体，如仍有问题请安装SimSun字体
 
+**Q: 数据搜索功能选择数据集后闪退**
+**A**: 此问题已在v2.1.1版本中完全修复。如仍遇到问题，请确保：
+- 使用最新版本的应用程序
+- 数据集采用标准目录结构
+- 在进度条运行时避免频繁切换菜单
+
 **Q: 数据搜索显示0个标注**
 **A**: 检查数据集是否使用标准目录结构，标签文件是否与图片文件名匹配
 
@@ -477,7 +483,40 @@ convert(
 
 ## 📝 更新日志
 
-### [2.1.0] - 2025-01-09
+### [2.1.1] - 2026-01-12
+
+#### 🔧 重要修复
+- **搜索面板闪退修复**: 彻底解决数据搜索功能选择数据集后闪退的问题
+- **线程安全优化**: 改进工作线程和进度对话框的生命周期管理
+- **菜单切换安全**: 修复在进度条运行时切换菜单导致的资源冲突问题
+- **AttributeError消除**: 解决进度更新时的 `'NoneType' object has no attribute 'setLabelText'` 错误
+
+#### 🛠️ 技术改进
+
+**进度管理器优化**
+- 在搜索面板中添加 `progress_manager` 实例变量保持对进度管理器的引用
+- 改进 `ProgressDialog` 的资源清理机制，确保线程和对话框正确销毁
+- 使用队列连接 (`Qt.QueuedConnection`) 确保UI更新在主线程中进行
+- 添加异常安全的UI更新机制，防止访问已销毁的对话框
+
+**主窗口资源管理**
+- 改进菜单切换逻辑，在切换前清理正在运行的任务
+- 添加窗口关闭事件处理器，确保应用程序关闭时所有任务被正确清理
+- 防止面板销毁时工作线程仍在运行导致的闪退问题
+
+**工作线程改进**
+- 完善线程取消和清理机制，支持超时强制终止
+- 改进信号连接和断开机制，防止内存泄漏
+- 添加析构函数确保资源在对象销毁时被正确清理
+
+#### ✅ 修复效果
+- **消除闪退**: 数据搜索功能在进度条运行时不再闪退
+- **菜单切换安全**: 用户可以在任何时候安全地切换菜单，正在运行的任务会被正确取消
+- **资源管理**: 所有工作线程和进度对话框都能被正确清理
+- **线程安全**: 使用队列连接确保UI更新在主线程中进行
+- **无错误输出**: 彻底消除AttributeError等异常输出
+
+### [2.1.0] - 2026-01-09
 
 #### 🎉 重大更新
 - **应用重命名**: 从"数据集转换工具"更名为"DataForge"，体现专业的数据锻造理念
@@ -952,6 +991,12 @@ dataset_name/
 **Q: Chinese text displays as squares in charts**
 **A**: System lacks Chinese fonts, program will automatically try multiple fonts, install SimSun font if issues persist
 
+**Q: Data search crashes after selecting dataset**
+**A**: This issue has been completely fixed in v2.1.1. If you still encounter problems, please ensure:
+- Use the latest version of the application
+- Dataset follows standard directory structure
+- Avoid frequent menu switching while progress bar is running
+
 **Q: Data search shows 0 annotations**
 **A**: Check if dataset uses standard directory structure, ensure label files match image filenames
 
@@ -1207,7 +1252,40 @@ convert(
 
 ## 📝 Version History
 
-### [2.1.0] - 2025-01-09
+### [2.1.1] - 2026-01-12
+
+#### 🔧 Critical Fixes
+- **Search Panel Crash Fix**: Completely resolved data search functionality crashing after dataset selection
+- **Thread Safety Optimization**: Improved lifecycle management of worker threads and progress dialogs
+- **Menu Switching Safety**: Fixed resource conflicts when switching menus while progress bar is running
+- **AttributeError Elimination**: Resolved `'NoneType' object has no attribute 'setLabelText'` errors during progress updates
+
+#### 🛠️ Technical Improvements
+
+**Progress Manager Optimization**
+- Added `progress_manager` instance variable in search panel to maintain reference to progress manager
+- Improved `ProgressDialog` resource cleanup mechanism ensuring proper thread and dialog destruction
+- Used queued connections (`Qt.QueuedConnection`) to ensure UI updates occur in main thread
+- Added exception-safe UI update mechanism preventing access to destroyed dialogs
+
+**Main Window Resource Management**
+- Improved menu switching logic to cleanup running tasks before switching
+- Added window close event handler ensuring all tasks are properly cleaned up when application closes
+- Prevented crashes caused by worker threads still running when panels are destroyed
+
+**Worker Thread Improvements**
+- Enhanced thread cancellation and cleanup mechanism with timeout forced termination support
+- Improved signal connection and disconnection mechanism preventing memory leaks
+- Added destructor to ensure resources are properly cleaned up when objects are destroyed
+
+#### ✅ Fix Results
+- **Eliminated Crashes**: Data search functionality no longer crashes while progress bar is running
+- **Safe Menu Switching**: Users can safely switch menus at any time, running tasks will be properly cancelled
+- **Resource Management**: All worker threads and progress dialogs are properly cleaned up
+- **Thread Safety**: Used queued connections to ensure UI updates occur in main thread
+- **No Error Output**: Completely eliminated AttributeError and other exception outputs
+
+### [2.1.0] - 2026-01-09
 
 #### 🎉 Major Updates
 - **Application Rename**: Renamed from "Dataset Conversion Tool" to "DataForge" for a more professional identity

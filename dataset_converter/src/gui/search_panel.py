@@ -23,6 +23,7 @@ class SearchPanel(QWidget):
         self.annotations: List[ImageAnnotation] = []
         self.filtered_annotations: List[ImageAnnotation] = []
         self.dataset_dir = None
+        self.progress_manager = None  # 存储进度管理器引用
         
         self.init_ui()
         self.apply_styles()
@@ -167,67 +168,117 @@ class SearchPanel(QWidget):
         if not directory:
             return
         
+        # 清理之前的进度管理器
+        if self.progress_manager:
+            self.progress_manager.cleanup()
+        
+        # 创建新的进度管理器并保存引用
+        from ..utils.worker_thread import ProgressDialog
+        
+        self.progress_manager = ProgressDialog(self)
+        title = "加载数据集"
+        self.progress_manager.start_task(title, self._load_with_progress, directory)
+    
+    def _load_with_progress(self, directory, progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的加载函数"""
         try:
+            if status_callback:
+                status_callback("验证数据集结构...")
+            
             # 验证数据集结构
             from ..core.dataset_validator import DatasetValidator
             dataset_info = DatasetValidator.get_dataset_info(Path(directory))
             
             if not dataset_info["is_valid"]:
-                QMessageBox.critical(self, "数据集格式错误", 
-                    f"数据集格式不符合要求:\n{dataset_info['message']}\n\n"
-                    f"请确保数据集采用以下结构:\n"
-                    f"数据集名称/\n"
-                    f"├── images/\n"
-                    f"│   ├── train/\n"
-                    f"│   ├── test/\n"
-                    f"│   └── val/\n"
-                    f"└── labels/\n"
-                    f"    ├── train/\n"
-                    f"    ├── test/\n"
-                    f"    └── val/")
-                return
-            
-            self.dataset_dir = Path(directory)
-            self.dataset_label.setText(f"数据集: {directory}")
+                raise ValueError(f"数据集格式不符合要求:\n{dataset_info['message']}\n\n请确保数据集采用标准结构")
             
             # 自动检测格式或使用用户选择的格式
             detected_format = dataset_info["detected_format"]
             if detected_format:
-                # 更新格式选择框
-                format_index = self.format_combo.findText(detected_format)
-                if format_index >= 0:
-                    self.format_combo.setCurrentIndex(format_index)
                 format_name = detected_format
             else:
                 format_name = self.format_combo.currentText()
             
+            if status_callback:
+                status_callback("解析数据集...")
+            
             # 解析数据集
+            from ..core.converter import PARSERS
             parser = PARSERS[format_name]
             
             # 如果解析器支持标签映射，设置空映射避免错误
             if hasattr(parser, "set_label_map"):
                 parser.set_label_map({})
             
-            self.annotations = parser.parse(self.dataset_dir)
+            # 使用带进度的解析方法
+            if hasattr(parser, 'parse_with_progress'):
+                annotations = parser.parse_with_progress(
+                    Path(directory),
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                    cancel_callback=cancel_callback
+                )
+            else:
+                annotations = parser.parse(Path(directory))
             
-            if self.annotations:
+            if not annotations:
+                raise ValueError("数据集结构正确，但未找到有效的标注数据，请检查标签文件内容")
+            
+            # 返回结果，UI更新将在主线程中进行
+            stats = dataset_info["statistics"]
+            result_info = {
+                'directory': directory,
+                'detected_format': detected_format,
+                'format': format_name.upper(),
+                'total_images': stats['total_images'],
+                'total_labels': stats['total_labels'],
+                'subsets': ', '.join(stats['subsets'].keys()),
+                'parsed_annotations': len(annotations),
+                'annotations': annotations
+            }
+            return result_info
+            
+        except Exception as e:
+            raise e
+    
+    def on_task_finished(self, result):
+        """任务完成回调"""
+        if isinstance(result, dict):
+            if 'annotations' in result:
+                # 加载任务完成 - 在主线程中安全更新UI
+                self.dataset_dir = Path(result['directory'])
+                self.dataset_label.setText(f"数据集: {result['directory']}")
+                
+                # 更新格式选择框
+                if result['detected_format']:
+                    format_index = self.format_combo.findText(result['detected_format'])
+                    if format_index >= 0:
+                        self.format_combo.setCurrentIndex(format_index)
+                
+                # 设置数据
+                self.annotations = result['annotations']
                 self.filtered_annotations = self.annotations.copy()
                 self.update_results()
                 
-                stats = dataset_info["statistics"]
+                # 显示成功消息
                 QMessageBox.information(self, "加载成功", 
                     f"数据集加载成功！\n"
-                    f"格式: {format_name.upper()}\n"
-                    f"图片总数: {stats['total_images']}\n"
-                    f"标签总数: {stats['total_labels']}\n"
-                    f"子集: {', '.join(stats['subsets'].keys())}\n"
-                    f"解析到 {len(self.annotations)} 个有效标注")
-            else:
-                QMessageBox.warning(self, "警告", "数据集结构正确，但未找到有效的标注数据，请检查标签文件内容")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"加载数据集失败: {str(e)}")
-            print(f"详细错误信息: {e}")  # 调试用
+                    f"格式: {result['format']}\n"
+                    f"图片总数: {result['total_images']}\n"
+                    f"标签总数: {result['total_labels']}\n"
+                    f"子集: {result['subsets']}\n"
+                    f"解析到 {result['parsed_annotations']} 个有效标注")
+                    
+            elif 'output_path' in result:
+                # 导出任务完成
+                QMessageBox.information(self, "导出成功", 
+                    f"筛选结果已导出到: {result['output_path']}\n"
+                    f"图片数量: {result['copied_images']}\n"
+                    f"标注数量: {result['annotations']}")
+        else:
+            # 其他任务结果
+            if hasattr(self, 'result_text'):
+                self.result_text.setText(str(result))
     
     def apply_filters(self):
         """应用过滤条件"""
@@ -327,11 +378,27 @@ class SearchPanel(QWidget):
         if not output_dir:
             return
         
+        # 清理之前的进度管理器
+        if self.progress_manager:
+            self.progress_manager.cleanup()
+        
+        # 创建新的进度管理器并保存引用
+        from ..utils.worker_thread import ProgressDialog
+        
+        self.progress_manager = ProgressDialog(self)
+        title = "导出筛选结果"
+        self.progress_manager.start_task(title, self._export_with_progress, output_dir)
+    
+    def _export_with_progress(self, output_dir, progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的导出函数"""
         try:
             from ..core.converter import PARSERS
             
             # 获取当前格式
             format_name = self.format_combo.currentText()
+            
+            if status_callback:
+                status_callback("创建输出目录结构...")
             
             # 创建输出目录结构
             output_path = Path(output_dir) / "filtered_dataset"
@@ -342,16 +409,31 @@ class SearchPanel(QWidget):
                 (output_path / "images" / subset).mkdir(parents=True, exist_ok=True)
                 (output_path / "labels" / subset).mkdir(parents=True, exist_ok=True)
             
+            if status_callback:
+                status_callback("复制图片文件...")
+            
             # 复制图片文件
             import shutil
             copied_images = 0
+            total_files = len(self.filtered_annotations)
             
-            for ann in self.filtered_annotations:
+            for i, ann in enumerate(self.filtered_annotations):
+                # 检查是否取消
+                if cancel_callback and cancel_callback():
+                    break
+                
+                # 更新进度
+                if progress_callback:
+                    progress_callback(i, total_files, f"复制 {ann.image_path.name}")
+                
                 if ann.image_path.exists():
                     # 复制图片到新位置
                     dest_img = output_path / "images" / "train" / ann.image_path.name
                     shutil.copy2(ann.image_path, dest_img)
                     copied_images += 1
+            
+            if status_callback:
+                status_callback("导出标签文件...")
             
             # 导出标签
             exporter = PARSERS[format_name]
@@ -359,7 +441,19 @@ class SearchPanel(QWidget):
                 exporter.set_label_map({})
             
             # 导出到labels/train目录
-            exporter.export(self.filtered_annotations, output_path / "labels" / "train")
+            if hasattr(exporter, 'export_with_progress'):
+                exporter.export_with_progress(
+                    self.filtered_annotations, 
+                    output_path / "labels" / "train",
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                    cancel_callback=cancel_callback
+                )
+            else:
+                exporter.export(self.filtered_annotations, output_path / "labels" / "train")
+            
+            if status_callback:
+                status_callback("创建说明文件...")
             
             # 创建说明文件
             readme_content = f"""# 筛选后的数据集
@@ -385,14 +479,14 @@ filtered_dataset/
             
             (output_path / "README.md").write_text(readme_content, encoding="utf-8")
             
-            QMessageBox.information(self, "导出成功", 
-                f"筛选结果已导出到: {output_path}\n"
-                f"图片数量: {copied_images}\n"
-                f"标注数量: {len(self.filtered_annotations)}")
+            return {
+                'output_path': output_path,
+                'copied_images': copied_images,
+                'annotations': len(self.filtered_annotations)
+            }
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"导出失败: {str(e)}")
-            print(f"导出错误详情: {e}")  # 调试用
+            raise e
     
     def generate_stats(self):
         """生成统计报告"""
@@ -493,3 +587,18 @@ filtered_dataset/
         except Exception as e:
             QMessageBox.critical(self, "错误", f"生成统计报告失败: {str(e)}")
             print(f"统计报告错误详情: {e}")  # 调试用
+    
+    def closeEvent(self, event):
+        """窗口关闭事件"""
+        # 清理进度管理器
+        if self.progress_manager:
+            self.progress_manager.cleanup()
+        super().closeEvent(event)
+    
+    def __del__(self):
+        """析构函数"""
+        try:
+            if self.progress_manager:
+                self.progress_manager.cleanup()
+        except:
+            pass  # 忽略析构时的错误

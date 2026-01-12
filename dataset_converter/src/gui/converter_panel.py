@@ -185,30 +185,67 @@ class ConverterPanel(QWidget):
         if not self.input_dir or not self.output_dir:
             QMessageBox.warning(self, "提示", "请先选择输入与输出目录")
             return
-        try:
-            format_names = {
-                "yolo": "YOLO检测",
-                "yolo_seg": "YOLO分割", 
-                "voc": "VOC",
-                "json": "JSON"
-            }
-            inp_name = format_names.get(self.input_fmt, self.input_fmt)
-            outp_name = format_names.get(self.output_fmt, self.output_fmt)
             
-            self.append_log(f"开始转换: {inp_name} → {outp_name}")
-            if self.output_fmt == "json":
-                self.append_log("导出说明：将为每张图片生成一个独立的 JSON 文件，命名为 <stem>.json")
-            elif self.input_fmt == "yolo_seg":
-                self.append_log("输入说明：YOLO分割格式支持矩形框(5个值)和多边形(>5个值)混合标注")
-            elif self.output_fmt == "yolo_seg":
-                self.append_log("输出说明：YOLO分割格式将保留原有的矩形框和多边形标注")
-                
-            convert(self.input_dir, self.input_fmt, self.output_dir, self.output_fmt, label_map=self.label_map)
-            self.append_log("转换完成")
-            QMessageBox.information(self, "完成", "转换完成！")
+        # 使用进度对话框执行转换
+        from ..utils.worker_thread import run_with_progress
+        
+        format_names = {
+            "yolo": "YOLO检测",
+            "yolo_seg": "YOLO分割", 
+            "voc": "VOC",
+            "json": "JSON"
+        }
+        inp_name = format_names.get(self.input_fmt, self.input_fmt)
+        outp_name = format_names.get(self.output_fmt, self.output_fmt)
+        
+        self.append_log(f"开始转换: {inp_name} → {outp_name}")
+        
+        # 启动带进度条的转换任务
+        title = f"数据集转换: {inp_name} → {outp_name}"
+        run_with_progress(
+            self, 
+            title, 
+            self._convert_with_progress,
+            self.input_dir,
+            self.input_fmt,
+            self.output_dir, 
+            self.output_fmt,
+            self.label_map
+        )
+    
+    def _convert_with_progress(self, input_dir, input_fmt, output_dir, output_fmt, label_map, 
+                              progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的转换函数"""
+        try:
+            if output_fmt == "json":
+                if status_callback:
+                    status_callback("导出说明：将为每张图片生成一个独立的 JSON 文件")
+            elif input_fmt == "yolo_seg":
+                if status_callback:
+                    status_callback("输入说明：YOLO分割格式支持矩形框和多边形混合标注")
+            elif output_fmt == "yolo_seg":
+                if status_callback:
+                    status_callback("输出说明：YOLO分割格式将保留原有的矩形框和多边形标注")
+            
+            # 执行转换（使用带进度回调的转换函数）
+            from ..core.converter import convert_with_progress
+            convert_with_progress(
+                input_dir, input_fmt, output_dir, output_fmt, 
+                label_map=label_map,
+                progress_callback=progress_callback,
+                status_callback=status_callback,
+                cancel_callback=cancel_callback
+            )
+            
+            return "转换完成"
+            
         except Exception as e:
-            self.append_log(f"发生错误: {e}")
-            QMessageBox.critical(self, "错误", str(e))
+            raise e
+    
+    def on_task_finished(self, result):
+        """转换任务完成回调"""
+        self.append_log("转换完成")
+        QMessageBox.information(self, "完成", "转换完成！")
 
     def on_load_label_map(self):
         fp, _ = QFileDialog.getOpenFileName(self, "选择标签字典 txt", str(Path.cwd()), "Text Files (*.txt)")

@@ -298,27 +298,38 @@ class AnalysisPanel(QWidget):
             QMessageBox.warning(self, "警告", "请先选择数据集目录")
             return
         
+        # 使用进度对话框执行分析
+        from ..utils.worker_thread import run_with_progress
+        
+        title = "数据集分析"
+        run_with_progress(
+            self, 
+            title, 
+            self._analyze_with_progress
+        )
+    
+    def _analyze_with_progress(self, progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的分析函数"""
         try:
+            if status_callback:
+                status_callback("验证数据集结构...")
+            
             # 验证数据集结构
             from ..core.dataset_validator import DatasetValidator
             dataset_info = DatasetValidator.get_dataset_info(self.dataset_dir)
             
             if not dataset_info["is_valid"]:
-                QMessageBox.critical(self, "数据集格式错误", 
-                    f"数据集格式不符合要求:\n{dataset_info['message']}\n\n"
-                    f"请确保数据集采用标准结构")
-                return
+                raise ValueError(f"数据集格式不符合要求:\n{dataset_info['message']}\n\n请确保数据集采用标准结构")
             
             # 使用检测到的格式或用户选择的格式
             detected_format = dataset_info["detected_format"]
             if detected_format:
                 format_type = detected_format
-                # 更新格式选择框
-                format_index = self.format_combo.findText(detected_format)
-                if format_index >= 0:
-                    self.format_combo.setCurrentIndex(format_index)
             else:
                 format_type = self.format_combo.currentText()
+            
+            if status_callback:
+                status_callback("解析数据集...")
             
             # 解析数据集
             from ..core.converter import PARSERS
@@ -328,22 +339,47 @@ class AnalysisPanel(QWidget):
             if hasattr(parser, "set_label_map"):
                 parser.set_label_map({})
             
-            annotations = parser.parse(self.dataset_dir)
+            # 使用带进度的解析方法
+            if hasattr(parser, 'parse_with_progress'):
+                annotations = parser.parse_with_progress(
+                    self.dataset_dir,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                    cancel_callback=cancel_callback
+                )
+            else:
+                annotations = parser.parse(self.dataset_dir)
             
             if not annotations:
-                QMessageBox.warning(self, "警告", "未找到有效的标注数据")
-                return
+                raise ValueError("未找到有效的标注数据")
+            
+            if status_callback:
+                status_callback("分析标注数据...")
             
             # 分析数据集
             result = self.analyze_annotations(annotations, dataset_info["statistics"])
             
+            # 返回结果和格式信息，UI更新将在主线程中进行
+            result['detected_format'] = detected_format
+            return result
+            
+        except Exception as e:
+            raise e
+    
+    def on_task_finished(self, result):
+        """分析任务完成回调"""
+        if isinstance(result, dict):
+            # 在主线程中安全更新UI
+            if 'detected_format' in result and result['detected_format']:
+                format_index = self.format_combo.findText(result['detected_format'])
+                if format_index >= 0:
+                    self.format_combo.setCurrentIndex(format_index)
+            
             # 格式化显示结果
             output = self.format_analysis_result(result)
             self.result_text.setText(output)
-            
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"分析失败: {str(e)}")
-            print(f"分析错误详情: {e}")  # 调试用
+        else:
+            self.result_text.setText(str(result))
     
     def analyze_annotations(self, annotations, dataset_stats):
         """分析标注数据"""
@@ -402,17 +438,31 @@ class AnalysisPanel(QWidget):
             QMessageBox.warning(self, "警告", "请先选择数据集目录")
             return
         
+        # 使用进度对话框执行验证
+        from ..utils.worker_thread import run_with_progress
+        
+        title = "数据集验证"
+        run_with_progress(
+            self, 
+            title, 
+            self._validate_with_progress
+        )
+    
+    def _validate_with_progress(self, progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的验证函数"""
         try:
+            if status_callback:
+                status_callback("验证数据集结构...")
+            
             # 使用新的数据集验证器
             from ..core.dataset_validator import DatasetValidator
             dataset_info = DatasetValidator.get_dataset_info(self.dataset_dir)
             
             if not dataset_info["is_valid"]:
-                output = f"数据集验证失败\n"
-                output += f"错误: {dataset_info['message']}\n\n"
-                output += "请确保数据集采用标准目录结构"
-                self.result_text.setText(output)
-                return
+                return f"数据集验证失败\n错误: {dataset_info['message']}\n\n请确保数据集采用标准目录结构"
+            
+            if status_callback:
+                status_callback("解析数据集进行详细验证...")
             
             # 解析数据集进行详细验证
             from ..core.converter import PARSERS
@@ -424,7 +474,19 @@ class AnalysisPanel(QWidget):
             if hasattr(parser, "set_label_map"):
                 parser.set_label_map({})
             
-            annotations = parser.parse(self.dataset_dir)
+            # 使用带进度的解析方法
+            if hasattr(parser, 'parse_with_progress'):
+                annotations = parser.parse_with_progress(
+                    self.dataset_dir,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                    cancel_callback=cancel_callback
+                )
+            else:
+                annotations = parser.parse(self.dataset_dir)
+            
+            if status_callback:
+                status_callback("计算健康度评分...")
             
             # 计算健康度评分
             health_score = self.calculate_health_score(annotations, dataset_info["statistics"])
@@ -452,11 +514,10 @@ class AnalysisPanel(QWidget):
             else:
                 output += "未发现明显问题，数据集质量良好！\n"
             
-            self.result_text.setText(output)
+            return output
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"验证失败: {str(e)}")
-            print(f"验证错误详情: {e}")  # 调试用
+            raise e
     
     def calculate_health_score(self, annotations, stats):
         """计算数据集健康度评分"""

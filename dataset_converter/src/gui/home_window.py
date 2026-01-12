@@ -91,11 +91,22 @@ class HomeWindow(QMainWindow):
         self.apply_theme()
 
     def on_menu_change(self, idx: int):
-        # 清空右侧内容
+        # 在切换面板前，确保当前面板的任务已完成或取消
+        current_widgets = []
         for i in range(self.content.layout().count()):
             item = self.content.layout().itemAt(i)
             if item and item.widget():
-                item.widget().setParent(None)
+                current_widgets.append(item.widget())
+        
+        # 检查搜索面板是否有正在运行的任务
+        for widget in current_widgets:
+            if hasattr(widget, 'progress_manager') and widget.progress_manager:
+                # 如果有正在运行的任务，取消它
+                widget.progress_manager.cleanup()
+        
+        # 清空右侧内容
+        for widget in current_widgets:
+            widget.setParent(None)
         
         # 根据选择显示对应面板
         if idx == 0:  # 数据集格式转换
@@ -366,3 +377,23 @@ class HomeWindow(QMainWindow):
         finally:
             self.setUpdatesEnabled(True)
             self.update()  # 强制重绘
+    
+    def closeEvent(self, event):
+        """窗口关闭事件 - 确保所有任务被正确清理"""
+        try:
+            # 清理所有面板的进度管理器
+            panels_with_progress = [
+                self.search_panel,
+                self.converter_panel,
+                self.splitting_panel,
+                self.analysis_panel
+            ]
+            
+            for panel in panels_with_progress:
+                if hasattr(panel, 'progress_manager') and panel.progress_manager:
+                    panel.progress_manager.cleanup()
+            
+        except Exception as e:
+            print(f"清理资源时发生错误: {e}")
+        
+        super().closeEvent(event)

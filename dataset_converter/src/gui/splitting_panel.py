@@ -442,21 +442,37 @@ class SplittingPanel(QWidget):
                 QMessageBox.warning(self, "提示", "比例总和必须为 100")
                 return
 
+        # 使用进度对话框执行划分
+        from ..utils.worker_thread import run_with_progress
+        
         if self.is_standard_structure and self.resplit_checkbox.isChecked():
-            # 重新划分标准结构数据集
-            self._resplit_standard_dataset(tr, vr, te)
+            title = "重新划分数据集"
+            run_with_progress(
+                self, 
+                title, 
+                self._resplit_with_progress,
+                tr, vr, te
+            )
         else:
-            # 传统方式划分
-            self._split_traditional_dataset(tr, vr, te)
+            title = "划分数据集"
+            run_with_progress(
+                self, 
+                title, 
+                self._split_with_progress,
+                tr, vr, te
+            )
 
-    def _resplit_standard_dataset(self, train_ratio, val_ratio, test_ratio):
-        """重新划分标准结构数据集"""
+    def _resplit_with_progress(self, train_ratio, val_ratio, test_ratio,
+                              progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的重新划分"""
         try:
+            if status_callback:
+                status_callback("收集数据集文件...")
+            
             # 收集所有图片
             all_images = self._gather_images_from_standard_structure()
             if not all_images:
-                QMessageBox.warning(self, "提示", "未在数据集中发现图片文件")
-                return
+                raise ValueError("未在数据集中发现图片文件")
 
             self._append_log(f"开始重新划分标准结构数据集...")
             self._append_log(f"原始划分: 训练集 {self.current_split_info.get('train', 0)} 张, "
@@ -485,6 +501,9 @@ class SplittingPanel(QWidget):
             
             self._append_log(f"新划分: 训练集 {n_train} 张, 验证集 {n_val} 张, 测试集 {n_test} 张")
             
+            if status_callback:
+                status_callback("创建输出目录...")
+            
             # 创建输出目录结构
             output_images_dir = self.output_dir / "images"
             output_labels_dir = self.output_dir / "labels"
@@ -497,6 +516,10 @@ class SplittingPanel(QWidget):
             labels_root = self.input_dir / "labels"
             
             for i, img in enumerate(all_images):
+                # 检查是否取消
+                if cancel_callback and cancel_callback():
+                    return "操作已取消"
+                
                 # 确定目标子集
                 if i < n_train:
                     target_subset = "train"
@@ -504,6 +527,10 @@ class SplittingPanel(QWidget):
                     target_subset = "val"
                 else:
                     target_subset = "test"
+                
+                # 更新进度
+                if progress_callback:
+                    progress_callback(i, len(all_images), f"处理 {img.name} -> {target_subset}")
                 
                 # 复制图片
                 target_img_dir = output_images_dir / target_subset
@@ -542,81 +569,91 @@ class SplittingPanel(QWidget):
                             k += 1
                     
                     shutil.copy2(label_path, target_label_path)
-                
-                # 更新进度
-                progress = int((i + 1) * 100 / len(all_images))
-                self.progress.setValue(progress)
             
-            self._append_log(f"重新划分完成！输出目录：{self.output_dir}")
-            QMessageBox.information(self, "完成", "数据集重新划分完成！")
+            return f"重新划分完成！输出目录：{self.output_dir}"
             
         except Exception as e:
-            self._append_log(f"重新划分失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"重新划分失败: {str(e)}")
+            raise e
 
-    def _split_traditional_dataset(self, train_ratio, val_ratio, test_ratio):
-        """传统方式划分数据集"""
-        # 开始前自动进行一次简单验证
-        imgs = self._gather_images(self.input_dir)
-        label_exts = {".txt", ".json", ".xml"}
-        label_files = [p for p in self.input_dir.rglob("*") if p.suffix.lower() in label_exts]
-        img_stems = {self._relative_stem(p, self.input_dir) for p in imgs}
-        lab_stems = {self._relative_stem(p, self.input_dir) for p in label_files}
-        missing_cnt = len([s for s in img_stems if s not in lab_stems])
-        orphan_cnt = len([s for s in lab_stems if s not in img_stems])
-        
-        if missing_cnt or orphan_cnt:
-            msg = f"检测到问题：缺少标签图片数={missing_cnt}；标签无对应图片数={orphan_cnt}。是否继续？"
-            ret = QMessageBox.question(self, "验证警告", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if ret != QMessageBox.Yes:
-                return
+    def _split_with_progress(self, train_ratio, val_ratio, test_ratio,
+                            progress_callback=None, status_callback=None, cancel_callback=None):
+        """带进度回调的传统划分"""
+        try:
+            if status_callback:
+                status_callback("验证数据集...")
+            
+            # 开始前自动进行一次简单验证
+            imgs = self._gather_images(self.input_dir)
+            label_exts = {".txt", ".json", ".xml"}
+            label_files = [p for p in self.input_dir.rglob("*") if p.suffix.lower() in label_exts]
+            img_stems = {self._relative_stem(p, self.input_dir) for p in imgs}
+            lab_stems = {self._relative_stem(p, self.input_dir) for p in label_files}
+            missing_cnt = len([s for s in img_stems if s not in lab_stems])
+            orphan_cnt = len([s for s in lab_stems if s not in img_stems])
+            
+            if missing_cnt or orphan_cnt:
+                msg = f"检测到问题：缺少标签图片数={missing_cnt}；标签无对应图片数={orphan_cnt}。是否继续？"
+                # 这里需要在主线程中询问用户
+                raise ValueError(f"数据集验证失败: {msg}")
 
-        if not imgs:
-            QMessageBox.warning(self, "提示", "未在数据集目录中发现图片文件")
-            return
+            if not imgs:
+                raise ValueError("未在数据集目录中发现图片文件")
 
-        self._append_log(f"发现图片文件 {len(imgs)} 个，开始传统方式划分...")
-        
-        # 随机种子（可复现）与打乱
-        seed_text = (self.seed_edit.text() or "").strip()
-        if seed_text:
-            try:
-                seed = int(seed_text)
-                random.seed(seed)
-                self._append_log(f"使用随机种子：{seed}")
-            except ValueError:
-                self._append_log("随机种子无效，忽略并使用默认随机")
-        random.shuffle(imgs)
+            self._append_log(f"发现图片文件 {len(imgs)} 个，开始传统方式划分...")
+            
+            # 随机种子（可复现）与打乱
+            seed_text = (self.seed_edit.text() or "").strip()
+            if seed_text:
+                try:
+                    seed = int(seed_text)
+                    random.seed(seed)
+                    self._append_log(f"使用随机种子：{seed}")
+                except ValueError:
+                    self._append_log("随机种子无效，忽略并使用默认随机")
+            random.shuffle(imgs)
 
-        # 计算数量
-        n = len(imgs)
-        n_train = int(n * train_ratio / 100)
-        n_val = int(n * val_ratio / 100)
-        n_test = n - n_train - n_val
+            # 计算数量
+            n = len(imgs)
+            n_train = int(n * train_ratio / 100)
+            n_val = int(n * val_ratio / 100)
+            n_test = n - n_train - n_val
 
-        train_dir = self.output_dir / "train"
-        val_dir = self.output_dir / "val"
-        test_dir = self.output_dir / "test"
-        train_dir.mkdir(parents=True, exist_ok=True)
-        val_dir.mkdir(parents=True, exist_ok=True)
-        test_dir.mkdir(parents=True, exist_ok=True)
+            if status_callback:
+                status_callback("创建输出目录...")
 
-        # 进度条按已处理数量更新
-        total = len(imgs)
-        for i, img in enumerate(imgs):
-            if i < n_train:
-                self._copy_pair(img, train_dir, self.input_dir)
-            elif i < n_train + n_val:
-                self._copy_pair(img, val_dir, self.input_dir)
-            else:
-                self._copy_pair(img, test_dir, self.input_dir)
-            # 更新进度
-            pct = int((i + 1) * 100 / total)
-            self.progress.setValue(pct)
+            train_dir = self.output_dir / "train"
+            val_dir = self.output_dir / "val"
+            test_dir = self.output_dir / "test"
+            train_dir.mkdir(parents=True, exist_ok=True)
+            val_dir.mkdir(parents=True, exist_ok=True)
+            test_dir.mkdir(parents=True, exist_ok=True)
 
-        self._append_log(
-            f"传统划分完成：train={n_train}, val={n_val}, test={n_test}，输出目录：{self.output_dir}"
-        )
+            # 进度条按已处理数量更新
+            total = len(imgs)
+            for i, img in enumerate(imgs):
+                # 检查是否取消
+                if cancel_callback and cancel_callback():
+                    return "操作已取消"
+                
+                # 更新进度
+                if progress_callback:
+                    progress_callback(i, total, f"处理 {img.name}")
+                
+                if i < n_train:
+                    self._copy_pair(img, train_dir, self.input_dir)
+                elif i < n_train + n_val:
+                    self._copy_pair(img, val_dir, self.input_dir)
+                else:
+                    self._copy_pair(img, test_dir, self.input_dir)
+
+            return f"传统划分完成：train={n_train}, val={n_val}, test={n_test}，输出目录：{self.output_dir}"
+            
+        except Exception as e:
+            raise e
+    
+    def on_task_finished(self, result):
+        """划分任务完成回调"""
+        self._append_log(result)
         QMessageBox.information(self, "完成", "数据集划分完成！")
 
     def on_ratio_change(self):
