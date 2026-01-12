@@ -49,6 +49,28 @@
 - **无损转换**: 保持标注精度和完整性
 - **批量处理**: 高效处理大规模数据集
 
+### 🤖 AI质量检测
+- **智能质量分析**: 自动检测标注质量问题
+- **图像质量评估**: 检测模糊、过暗、过亮等图像问题
+- **标注质量验证**: 检测边界框重叠、超出范围等问题
+- **质量评分系统**: 提供0-100分的质量评分
+- **详细报告**: 生成完整的质量检测报告
+
+### 🖼️ 批量图片处理
+- **多种处理操作**: 调整尺寸、裁剪、旋转、翻转等
+- **图像增强**: 亮度、对比度、饱和度调整
+- **格式转换**: 支持JPEG、PNG、BMP等格式互转
+- **预设配置**: 网页优化、缩略图生成等预设
+- **批量处理**: 高效处理大量图片文件
+
+### 👥 协作标注管理
+- **数据集划分**: 将数据集按人头数智能划分给多个标注员
+- **多种分配方式**: 支持按序号顺序、随机分配、按文件夹名称分配
+- **自定义命名**: 支持person_1、annotator_1或完全自定义的文件夹命名
+- **实时预览**: 显示每个标注员将分配到的文件数量和占比
+- **进度跟踪**: 实时显示划分进度，支持取消操作
+- **完整复制**: 自动复制对应的标签文件（txt、xml、json格式）
+
 ### 📊 数据分析
 - **全面统计**: 图片数量、标注分布、类别统计
 - **质量评估**: 自动检测数据问题，生成健康度评分
@@ -483,6 +505,42 @@ convert(
 
 ## 📝 更新日志
 
+### [2.2.0] - 2026-01-12
+
+#### 🚀 重大功能更新
+- **高级功能面板**: 新增专门的高级功能模块，集成AI质量检测和批量图片处理
+- **AI质量检测系统**: 智能检测标注质量问题，包括图像质量、边界框质量、类别平衡等
+- **批量图片处理工具**: 支持调整尺寸、格式转换、图像增强等多种批量操作
+- **协作标注管理**: 数据集智能划分功能，支持多人协作标注项目
+
+#### 🤖 AI质量检测功能
+- **图像质量分析**: 检测图片亮度、对比度、模糊度等问题
+- **标注质量验证**: 检测边界框超出范围、重叠度过高、尺寸异常等问题
+- **类别平衡检查**: 分析数据集中各类别的分布情况
+- **质量评分系统**: 提供0-100分的综合质量评分
+- **详细报告导出**: 生成Markdown格式的质量检测报告
+
+#### 🖼️ 批量图片处理功能
+- **多种处理操作**: 调整尺寸、裁剪、旋转、翻转、亮度/对比度/饱和度调整
+- **图像滤镜**: 模糊、锐化、灰度转换、标准化等处理
+- **格式转换**: 支持JPEG、PNG、BMP、TIFF、WEBP等格式互转
+- **预设配置**: 网页优化、缩略图生成、图像增强、数据集准备等预设
+- **批量处理**: 高效处理大量图片文件，支持进度显示和状态回调
+
+#### 👥 协作标注功能
+- **数据集智能划分**: 按人头数将数据集划分给多个标注员，支持2-20人的团队协作
+- **多种分配策略**: 按序号顺序分配、随机分配、按文件夹名称分配三种方式
+- **灵活命名方案**: 支持person_1/person_2、annotator_1/annotator_2或完全自定义的文件夹命名
+- **实时预览功能**: 显示每个标注员将分配到的文件数量、占比，便于调整分配方案
+- **完整文件复制**: 自动复制图片文件和对应的标签文件（支持txt、xml、json格式）
+- **标准目录结构**: 为每个标注员创建images和labels子目录，便于后续管理
+
+#### 🛠️ 技术改进
+- **新增依赖**: 添加opencv-python支持，用于图像质量分析
+- **模块化设计**: 高级功能采用选项卡式界面，便于功能扩展
+- **异常处理**: 完善的错误处理机制，确保功能稳定性
+- **进度反馈**: 所有长时间操作都提供进度条和状态反馈
+
 ### [2.1.1] - 2026-01-12
 
 #### 🔧 重要修复
@@ -817,6 +875,28 @@ convert(
 - **Smart conversion**: Mixed processing of bounding boxes and polygon annotations
 - **Lossless conversion**: Maintains annotation precision and completeness
 - **Batch processing**: Efficient handling of large-scale datasets
+
+### 🤖 AI Quality Detection
+- **Intelligent quality analysis**: Automatic detection of annotation quality issues
+- **Image quality assessment**: Detect blur, darkness, brightness and other image problems
+- **Annotation quality validation**: Detect bounding box overlap, out-of-bounds and other issues
+- **Quality scoring system**: Provide 0-100 quality scores
+- **Detailed reports**: Generate comprehensive quality detection reports
+
+### 🖼️ Batch Image Processing
+- **Multiple processing operations**: Resize, crop, rotate, flip, etc.
+- **Image enhancement**: Brightness, contrast, saturation adjustment
+- **Format conversion**: Support JPEG, PNG, BMP and other format conversion
+- **Preset configurations**: Web optimization, thumbnail generation and other presets
+- **Batch processing**: Efficiently process large numbers of image files
+
+### 👥 Collaborative Annotation Management
+- **Dataset Splitting**: Intelligently split datasets among multiple annotators by headcount
+- **Multiple Assignment Methods**: Support sequential, random, and folder-name-based assignment
+- **Custom Naming**: Support person_1, annotator_1, or completely custom folder naming
+- **Real-time Preview**: Display file count and percentage for each annotator
+- **Progress Tracking**: Real-time progress display with cancellation support
+- **Complete Copy**: Automatically copy corresponding label files (txt, xml, json formats)
 
 ### 📊 Data Analysis
 - **Comprehensive statistics**: Image count, annotation distribution, class statistics
@@ -1251,6 +1331,42 @@ convert(
 - **Long-term Stability**: Optimized interface architecture ensuring stable long-term use
 
 ## 📝 Version History
+
+### [2.2.0] - 2026-01-12
+
+#### 🚀 Major Feature Updates
+- **Advanced Features Panel**: New dedicated advanced features module integrating AI quality detection and batch image processing
+- **AI Quality Detection System**: Intelligent detection of annotation quality issues including image quality, bounding box quality, class balance, etc.
+- **Batch Image Processing Tool**: Support for resizing, format conversion, image enhancement and other batch operations
+- **Collaborative Annotation Management**: Intelligent dataset splitting functionality for multi-user collaborative annotation projects
+
+#### 🤖 AI Quality Detection Features
+- **Image Quality Analysis**: Detect image brightness, contrast, blur and other issues
+- **Annotation Quality Validation**: Detect bounding boxes out of bounds, excessive overlap, abnormal sizes, etc.
+- **Class Balance Check**: Analyze distribution of various classes in dataset
+- **Quality Scoring System**: Provide comprehensive quality scores from 0-100
+- **Detailed Report Export**: Generate quality detection reports in Markdown format
+
+#### 🖼️ Batch Image Processing Features
+- **Multiple Processing Operations**: Resize, crop, rotate, flip, brightness/contrast/saturation adjustment
+- **Image Filters**: Blur, sharpen, grayscale conversion, normalization, etc.
+- **Format Conversion**: Support conversion between JPEG, PNG, BMP, TIFF, WEBP and other formats
+- **Preset Configurations**: Web optimization, thumbnail generation, image enhancement, dataset preparation presets
+- **Batch Processing**: Efficiently process large numbers of image files with progress display and status callbacks
+
+#### 👥 Collaborative Annotation Features
+- **Intelligent Dataset Splitting**: Split datasets among multiple annotators by headcount, supporting teams of 2-20 people
+- **Multiple Assignment Strategies**: Sequential assignment, random assignment, and folder-name-based assignment
+- **Flexible Naming Schemes**: Support person_1/person_2, annotator_1/annotator_2, or completely custom folder naming
+- **Real-time Preview**: Display file count and percentage for each annotator to facilitate assignment adjustment
+- **Complete File Copying**: Automatically copy image files and corresponding label files (supports txt, xml, json formats)
+- **Standard Directory Structure**: Create images and labels subdirectories for each annotator for easy management
+
+#### 🛠️ Technical Improvements
+- **New Dependencies**: Added opencv-python support for image quality analysis
+- **Modular Design**: Advanced features use tabbed interface for easy feature expansion
+- **Exception Handling**: Comprehensive error handling mechanisms ensuring feature stability
+- **Progress Feedback**: All long-running operations provide progress bars and status feedback
 
 ### [2.1.1] - 2026-01-12
 
