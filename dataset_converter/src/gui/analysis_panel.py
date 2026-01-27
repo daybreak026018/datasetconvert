@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QThread, pyqtSignal
 from pathlib import Path
 import json
+import copy
 
 from ..core.dataset_analyzer import DatasetAnalyzer
 from ..core.dataset_validator import DatasetValidator
@@ -203,7 +204,11 @@ class AnalysisPanel(QWidget):
         
         # 增强选项
         self.aug_checkboxes = {}
-        aug_options = ['brightness', 'contrast', 'saturation', 'blur', 'flip_horizontal', 'rotate']
+        aug_options = [
+            'brightness', 'contrast', 'saturation', 
+            'blur', 'noise',
+            'flip_horizontal', 'flip_vertical', 'rotate'
+        ]
         
         for i, option in enumerate(aug_options):
             checkbox = QCheckBox(option)
@@ -722,33 +727,27 @@ class AnalysisPanel(QWidget):
                     # 加载图片
                     with Image.open(ann.image_path) as img:
                         augmented_img = img.copy()
+                        aug_ann = copy.deepcopy(ann)
                         
                         # 应用增强
-                        if 'brightness' in selected_augs:
-                            enhancer = ImageEnhance.Brightness(augmented_img)
-                            augmented_img = enhancer.enhance(random.uniform(0.7, 1.3))
+                        # 定义增强顺序和概率
+                        ordered_augs = [
+                            ('brightness', 1.0), ('contrast', 1.0), ('saturation', 1.0),
+                            ('blur', 0.3), ('noise', 1.0),
+                            ('flip_horizontal', 0.5), ('flip_vertical', 0.5), ('rotate', 0.5)
+                        ]
                         
-                        if 'contrast' in selected_augs:
-                            enhancer = ImageEnhance.Contrast(augmented_img)
-                            augmented_img = enhancer.enhance(random.uniform(0.8, 1.2))
-                        
-                        if 'saturation' in selected_augs:
-                            enhancer = ImageEnhance.Color(augmented_img)
-                            augmented_img = enhancer.enhance(random.uniform(0.8, 1.2))
-                        
-                        if 'blur' in selected_augs and random.random() < 0.3:
-                            augmented_img = augmented_img.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.5, 1.5)))
-                        
-                        if 'flip_horizontal' in selected_augs and random.random() < 0.5:
-                            augmented_img = augmented_img.transpose(Image.FLIP_LEFT_RIGHT)
+                        for aug_name, prob in ordered_augs:
+                            if aug_name in selected_augs and random.random() < prob:
+                                augmented_img, aug_ann = self.augmentor.apply_augmentation(augmented_img, aug_ann, aug_name)
+
                         
                         # 保存增强图片
                         aug_name = f"aug_{aug_idx}_{ann.image_path.stem}{ann.image_path.suffix}"
                         aug_img_path = output_path / "images" / "train" / aug_name
                         augmented_img.save(aug_img_path)
                         
-                        # 创建对应的标注
-                        aug_ann = ann
+                        # 更新标注路径
                         aug_ann.image_path = aug_img_path
                         augmented_annotations.append(aug_ann)
                         augmented_count += 1

@@ -41,8 +41,11 @@ class HomeWindow(QMainWindow):
 
         # 左侧功能列表
         self.menu = QListWidget()
-        self.menu.setFixedWidth(260)
+        self.menu.setFixedWidth(300)
         self.menu.setIconSize(QSize(24, 24))
+        # 禁用文本省略号，防止初始化时因宽度计算延迟出现"..."
+        self.menu.setTextElideMode(Qt.ElideNone)
+        self.menu.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
         menu_icon = QIcon(str(icon_path)) if icon_path.exists() else None
         
