@@ -7,10 +7,11 @@ from PyQt5.QtWidgets import (
     QColorDialog, QFontDialog, QMessageBox, QTabWidget,
     QGridLayout, QLineEdit, QTextEdit, QScrollArea
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QColor, QPalette
 
 from .theme_manager import theme_manager
+from .custom_tab_bar import CustomTabWidget
 
 
 class SettingsPanel(QWidget):
@@ -29,7 +30,7 @@ class SettingsPanel(QWidget):
         layout = QVBoxLayout(self)
         
         # 创建标签页
-        tab_widget = QTabWidget()
+        tab_widget = CustomTabWidget()
         
         # 主题设置标签页
         theme_tab = self.create_theme_tab()

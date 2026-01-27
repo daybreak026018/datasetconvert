@@ -21,6 +21,7 @@ from ..core.ai_quality_checker import AIQualityChecker, QualityIssueType
 from ..core.batch_image_processor import BatchImageProcessor, ProcessingOperation, ProcessingConfig
 from ..core.base_parser import ImageAnnotation
 from ..core.converter import PARSERS
+from .custom_tab_bar import CustomTabWidget
 
 
 class QualityCheckTab(QWidget):
@@ -593,7 +594,7 @@ class AdvancedPanel(QWidget):
         layout.addWidget(title)
         
         # 选项卡控件
-        self.tab_widget = QTabWidget()
+        self.tab_widget = CustomTabWidget()
         
         # AI质量检测选项卡
         self.quality_tab = QualityCheckTab(self)
@@ -601,7 +602,7 @@ class AdvancedPanel(QWidget):
         
         # 批量图片处理选项卡
         self.batch_tab = BatchProcessingTab(self)
-        self.tab_widget.addTab(self.batch_tab, "批量图片处理")
+        self.tab_widget.addTab(self.batch_tab, "批量处理")
         
         layout.addWidget(self.tab_widget)
     

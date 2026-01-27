@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QGridLayout,
 )
+from PyQt5.QtCore import Qt
 
 from ..core.converter import convert
 from ..utils.logger import get_logger
@@ -23,6 +24,10 @@ class ConverterPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = get_logger()
+        
+        # 存储所有转换按钮的引用
+        self.conversion_buttons = []
+        self.current_selected_button = None
 
         main_layout = QVBoxLayout(self)
 
@@ -68,6 +73,7 @@ class ConverterPanel(QWidget):
         # 当前格式显示
         self.label_fmt = QLabel("当前格式: YOLO检测 → VOC")
         self.label_fmt.setWordWrap(True)
+        self.label_fmt.setProperty("labelType", "status")
         scroll_layout.addWidget(self.label_fmt)
         
         # 基础格式转换组
@@ -110,6 +116,9 @@ class ConverterPanel(QWidget):
         self.input_fmt = "yolo"
         self.output_fmt = "voc"
         self.label_map = {}
+        
+        # 设置默认选中的按钮（YOLO检测 → VOC）
+        self.set_formats("yolo", "voc", auto_select_button=True)
     
     def create_conversion_group(self, title, conversions):
         """创建转换按钮组"""
@@ -120,7 +129,13 @@ class ConverterPanel(QWidget):
         for i, (text, inp_fmt, out_fmt) in enumerate(conversions):
             btn = QPushButton(text)
             btn.setMaximumWidth(200)  # 限制按钮宽度
-            btn.clicked.connect(lambda checked, i=inp_fmt, o=out_fmt: self.set_formats(i, o))
+            btn.setCheckable(True)  # 设置按钮可选中
+            btn.clicked.connect(lambda checked, i=inp_fmt, o=out_fmt, b=btn: self.set_formats(i, o, b))
+            
+            # 存储按钮引用和对应的格式信息
+            btn.input_format = inp_fmt
+            btn.output_format = out_fmt
+            self.conversion_buttons.append(btn)
             
             row = i // 2
             col = i % 2
@@ -161,7 +176,8 @@ class ConverterPanel(QWidget):
             self.output_dir = Path(d)
             self.output_label.setText(f"输出目录: {d}")
 
-    def set_formats(self, inp: str, outp: str):
+    def set_formats(self, inp: str, outp: str, selected_button=None, auto_select_button=False):
+        """设置转换格式并更新按钮高亮状态"""
         self.input_fmt = inp
         self.output_fmt = outp
         
@@ -175,7 +191,127 @@ class ConverterPanel(QWidget):
         
         inp_name = format_names.get(inp, inp.upper())
         outp_name = format_names.get(outp, outp.upper())
-        self.label_fmt.setText(f"当前格式: {inp_name} → {outp_name}")
+        
+        # 使用更醒目的格式显示
+        format_text = f"✓ 当前选择: {inp_name} → {outp_name}"
+        self.label_fmt.setText(format_text)
+        
+        # 更新按钮选中状态
+        self.update_button_selection(inp, outp, selected_button, auto_select_button)
+    
+    def update_button_selection(self, inp_fmt, out_fmt, selected_button=None, auto_select=False):
+        """更新按钮选中状态和高亮效果"""
+        # 清除所有按钮的选中状态
+        for btn in self.conversion_buttons:
+            btn.setChecked(False)
+            btn.setStyleSheet("")  # 清除自定义样式
+        
+        # 设置当前选中的按钮
+        target_button = selected_button
+        
+        # 如果没有指定按钮，自动查找匹配的按钮
+        if not target_button or auto_select:
+            for btn in self.conversion_buttons:
+                if (hasattr(btn, 'input_format') and hasattr(btn, 'output_format') and
+                    btn.input_format == inp_fmt and btn.output_format == out_fmt):
+                    target_button = btn
+                    break
+        
+        # 应用选中状态和高亮样式
+        if target_button:
+            target_button.setChecked(True)
+            self.apply_selected_style(target_button)
+            self.current_selected_button = target_button
+    
+    def apply_selected_style(self, button):
+        """应用选中按钮的高亮样式"""
+        # 获取当前主题的颜色
+        from .theme_manager import theme_manager
+        current_theme = theme_manager.get_current_theme()
+        
+        if current_theme == "dark":
+            # 深色主题的高亮样式
+            selected_style = """
+                QPushButton:checked {
+                    background-color: #0078d4;
+                    border: 2px solid #106ebe;
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:checked:hover {
+                    background-color: #106ebe;
+                    border: 2px solid #005a9e;
+                }
+                QPushButton:hover {
+                    background-color: #404040;
+                    border: 1px solid #606060;
+                }
+            """
+        elif current_theme == "blue":
+            # 蓝色主题的高亮样式
+            selected_style = """
+                QPushButton:checked {
+                    background-color: #2196F3;
+                    border: 2px solid #1976D2;
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:checked:hover {
+                    background-color: #1976D2;
+                    border: 2px solid #1565C0;
+                }
+                QPushButton:hover {
+                    background-color: #E3F2FD;
+                    border: 1px solid #2196F3;
+                }
+            """
+        elif current_theme == "green":
+            # 绿色主题的高亮样式
+            selected_style = """
+                QPushButton:checked {
+                    background-color: #4CAF50;
+                    border: 2px solid #388E3C;
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:checked:hover {
+                    background-color: #388E3C;
+                    border: 2px solid #2E7D32;
+                }
+                QPushButton:hover {
+                    background-color: #E8F5E8;
+                    border: 1px solid #4CAF50;
+                }
+            """
+        else:
+            # 浅色主题的高亮样式
+            selected_style = """
+                QPushButton:checked {
+                    background-color: #0078d4;
+                    border: 2px solid #106ebe;
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }
+                QPushButton:checked:hover {
+                    background-color: #106ebe;
+                    border: 2px solid #005a9e;
+                }
+                QPushButton:hover {
+                    background-color: #f0f0f0;
+                    border: 1px solid #0078d4;
+                }
+            """
+        
+        button.setStyleSheet(selected_style)
+        
+        # 为所有其他按钮应用悬停效果
+        for btn in self.conversion_buttons:
+            if btn != button:
+                self.apply_hover_style(btn)
 
     def append_log(self, msg: str):
         self.log_view.append(msg)
@@ -260,3 +396,53 @@ class ConverterPanel(QWidget):
             self.label_fmt.setText(self.label_fmt.text() + "（已加载标签映射）")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"解析失败: {e}")
+    
+    def apply_hover_style(self, button):
+        """为未选中的按钮应用悬停样式"""
+        from .theme_manager import theme_manager
+        current_theme = theme_manager.get_current_theme()
+        
+        if current_theme == "dark":
+            hover_style = """
+                QPushButton:hover {
+                    background-color: #404040;
+                    border: 1px solid #606060;
+                    border-radius: 4px;
+                }
+            """
+        elif current_theme == "blue":
+            hover_style = """
+                QPushButton:hover {
+                    background-color: #E3F2FD;
+                    border: 1px solid #2196F3;
+                    border-radius: 4px;
+                }
+            """
+        elif current_theme == "green":
+            hover_style = """
+                QPushButton:hover {
+                    background-color: #E8F5E8;
+                    border: 1px solid #4CAF50;
+                    border-radius: 4px;
+                }
+            """
+        else:
+            hover_style = """
+                QPushButton:hover {
+                    background-color: #f0f0f0;
+                    border: 1px solid #0078d4;
+                    border-radius: 4px;
+                }
+            """
+        
+        button.setStyleSheet(hover_style)
+
+    def apply_theme(self):
+        """应用主题时更新选中按钮的样式"""
+        if self.current_selected_button:
+            self.apply_selected_style(self.current_selected_button)
+        
+        # 为所有未选中的按钮应用悬停样式
+        for btn in self.conversion_buttons:
+            if btn != self.current_selected_button:
+                self.apply_hover_style(btn)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QFrame
 
@@ -16,7 +16,21 @@ class HomeWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
 
         # 设置窗口尺寸，适应更多内容
-        self.setFixedSize(1200, 800)
+        # 计算需要的最小宽度以容纳所有选项卡
+        min_width = 1200  # 基础宽度
+        
+        # 根据菜单项数量调整宽度
+        menu_items_count = len([
+            "数据集格式转换", "数据集划分", "数据集分析", "数据可视化",
+            "数据搜索", "协作标注", "高级功能", "设置"
+        ])
+        
+        # 确保有足够宽度显示所有功能
+        if menu_items_count > 6:
+            min_width = max(min_width, menu_items_count * 150 + 400)
+        
+        self.setMinimumSize(min_width, 800)
+        self.resize(min_width, 800)
 
         central = QWidget(self)
         self.setCentralWidget(central)
@@ -66,6 +80,7 @@ class HomeWindow(QMainWindow):
         from .search_panel import SearchPanel
         # from .collaboration_panel import CollaborationPanel
         from .advanced_panel import AdvancedPanel
+        from .custom_tab_bar import CustomTabWidget
         
         self.content = QWidget()
         content_layout = QVBoxLayout(self.content)
@@ -151,6 +166,7 @@ class HomeWindow(QMainWindow):
         from pathlib import Path
         import shutil
         import random
+        from .custom_tab_bar import CustomTabWidget
         
         class DatasetSplitWorker(QThread):
             progress_updated = pyqtSignal(int, int, str)
@@ -281,7 +297,7 @@ class HomeWindow(QMainWindow):
                 layout.addWidget(title)
                 
                 # 选项卡
-                tab_widget = QTabWidget()
+                tab_widget = CustomTabWidget()
                 
                 # 数据集划分选项卡
                 split_tab = self.create_split_tab()
@@ -857,9 +873,40 @@ class HomeWindow(QMainWindow):
         self.setUpdatesEnabled(False)
         try:
             self.setStyleSheet(stylesheet)
+            
+            # 更新转换面板的按钮样式
+            if hasattr(self, 'converter_panel') and hasattr(self.converter_panel, 'apply_theme'):
+                self.converter_panel.apply_theme()
+                
+            # 确保所有选项卡控件重新配置显示
+            self._ensure_tab_display()
+                
         finally:
             self.setUpdatesEnabled(True)
             self.update()  # 强制重绘
+    
+    def _ensure_tab_display(self):
+        """确保所有选项卡正确显示"""
+        # 查找所有CustomTabWidget并重新配置
+        from .custom_tab_bar import CustomTabWidget
+        
+        def configure_tab_widgets(widget):
+            for child in widget.findChildren(CustomTabWidget):
+                if hasattr(child, '_configure_display'):
+                    QTimer.singleShot(10, child._configure_display)
+            
+            # 递归处理子控件
+            for child in widget.children():
+                if hasattr(child, 'findChildren'):
+                    configure_tab_widgets(child)
+        
+        configure_tab_widgets(self)
+    
+    def resizeEvent(self, event):
+        """重写窗口大小调整事件"""
+        super().resizeEvent(event)
+        # 窗口大小变化时，确保选项卡正确显示
+        QTimer.singleShot(50, self._ensure_tab_display)
     
     def closeEvent(self, event):
         """窗口关闭事件 - 确保所有任务被正确清理"""

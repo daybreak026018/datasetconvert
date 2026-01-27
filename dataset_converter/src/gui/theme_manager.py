@@ -528,11 +528,17 @@ class ThemeManager(QObject):
         
         QTabWidget::tab-bar {{
             alignment: left;
+            left: 5px;
         }}
         
         QTabBar {{
             background-color: transparent;
             outline: none;
+            qproperty-expanding: true;
+            qproperty-usesScrollButtons: false;
+            qproperty-elideMode: 0;
+            qproperty-drawBase: false;
+            font-size: {fonts['size_small']}px;
         }}
         
         QTabBar::tab {{
@@ -540,11 +546,13 @@ class ThemeManager(QObject):
             border: 2px solid {colors['border']};
             border-bottom: none;
             border-radius: {config['border_radius']}px {config['border_radius']}px 0px 0px;
-            padding: {spacing['normal']}px {spacing['large']}px;
+            padding: {spacing['small']}px {spacing['normal']}px;
             margin-right: 2px;
-            font-size: {fonts['size_normal']}px;
+            font-size: {fonts['size_small']}px;
             color: {colors['text']};
             outline: none;
+            text-align: center;
+            white-space: nowrap;
         }}
         
         QTabBar::tab:selected {{
