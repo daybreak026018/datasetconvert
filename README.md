@@ -79,7 +79,7 @@
 
 ### 🛠️ 数据处理
 - **自动修复**: 智能修复坐标错误、重复文件等问题
-- **数据增强**: 7种图像增强方法，支持自定义组合
+- **数据增强**: 8种图像增强方法，支持垂直翻转和噪声增强，几何变换自动同步标签
 - **数据整理**: 批量重命名、数据集划分、多数据集合并
 - **格式标准化**: 统一文件命名和目录结构
 
@@ -505,6 +505,14 @@ convert(
 
 ## 📝 更新日志
 
+### [2.2.1] - 2026-01-27
+
+#### 🚀 功能增强
+- **统一数据增强接口**: 重构数据增强模块，统一处理几何变换（翻转、旋转）和像素级变换（模糊、噪声）
+- **智能标签同步**: 所有涉及形状变化的增强方式（如垂直翻转、旋转）都会自动更新对应的标签信息，确保数据一致性
+- **新增增强类型**: 新增 **垂直翻转** 和 **噪声** 增强支持，丰富数据多样性
+- **GUI 优化**: 分析面板新增增强选项，支持更细粒度的增强控制
+
 ### [2.2.0] - 2026-01-12
 
 #### 🚀 重大功能更新
@@ -906,7 +914,7 @@ convert(
 
 ### 🛠️ Data Processing
 - **Auto-repair**: Smart fixing of coordinate errors, duplicate files, etc.
-- **Data augmentation**: 7 image enhancement methods with custom combinations
+- **Data augmentation**: 8 image enhancement methods including vertical flip and noise, with auto-label sync
 - **Data organization**: Batch renaming, dataset splitting, multi-dataset merging
 - **Format standardization**: Unified file naming and directory structure
 
@@ -1146,7 +1154,7 @@ dataset_converter/
 
 ### 3. Dataset Processing
 - 🔧 **Auto-repair**: Fix coordinate errors, duplicate files, etc.
-- 🎨 **Data augmentation**: Brightness, contrast, rotation, flip, etc.
+- 🎨 **Data augmentation**: 8 image enhancement methods including vertical flip and noise, with auto-label sync
 - 📂 **Data organization**: Rename, split, merge datasets
 - ⚖️ **Data comparison**: Multi-dataset comparison analysis
 
