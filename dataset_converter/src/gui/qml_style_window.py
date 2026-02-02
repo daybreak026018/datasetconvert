@@ -514,14 +514,15 @@ class QMLStyleWindow(QMainWindow):
             7: QMLSettingsPanel(self)
         }
         
-        # 设置默认面板
+        # 确保第一个导航项被激活
+        if self.navigation_items:
+            self.navigation_items[0].set_active(True)
+        
+        # 设置默认面板并确保显示
         self.switch_panel(0)
     
     def switch_panel(self, index):
         """切换面板"""
-        if index == self.current_panel_index:
-            return
-        
         # 更新导航状态
         for i, nav_item in enumerate(self.navigation_items):
             nav_item.set_active(i == index)
@@ -534,7 +535,10 @@ class QMLStyleWindow(QMainWindow):
         
         # 添加新面板
         if index in self.panels:
-            self.content_layout.addWidget(self.panels[index])
+            panel = self.panels[index]
+            self.content_layout.addWidget(panel)
+            panel.setVisible(True)  # 确保面板可见
+            panel.update()  # 强制更新
             self.current_panel_index = index
             
             # 更新页面标题
@@ -544,6 +548,9 @@ class QMLStyleWindow(QMainWindow):
             ]
             if 0 <= index < len(titles):
                 self.page_title.setText(titles[index])
+        
+        # 强制更新内容区域
+        self.content_area.update()
     
     def apply_global_style(self):
         """应用全局样式"""
@@ -830,3 +837,13 @@ class QMLStyleWindow(QMainWindow):
         """
         
         self.setStyleSheet(style)
+    
+    def showEvent(self, event):
+        """窗口显示事件"""
+        super().showEvent(event)
+        # 确保第一个面板正确显示
+        if self.current_panel_index == 0 and 0 in self.panels:
+            panel = self.panels[0]
+            panel.setVisible(True)
+            panel.update()
+            self.content_area.update()
