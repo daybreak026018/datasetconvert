@@ -32,7 +32,7 @@ class ConverterPanel(QWidget):
         main_layout = QVBoxLayout(self)
 
         # 输入输出路径 - 固定在顶部
-        path_group = QWidget()
+        path_group = QGroupBox("路径设置")
         path_layout = QVBoxLayout(path_group)
         
         # 输入目录
@@ -60,21 +60,12 @@ class ConverterPanel(QWidget):
         path_layout.addLayout(output_layout)
         main_layout.addWidget(path_group)
 
-        # 创建滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(2)  # 总是显示垂直滚动条
-        scroll_area.setHorizontalScrollBarPolicy(1)  # 根据需要显示水平滚动条
-        
-        # 创建滚动内容容器
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-
+        # 移除滚动区域，直接添加到主布局
         # 当前格式显示
         self.label_fmt = QLabel("当前格式: YOLO检测 → VOC")
         self.label_fmt.setWordWrap(True)
         self.label_fmt.setProperty("labelType", "status")
-        scroll_layout.addWidget(self.label_fmt)
+        main_layout.addWidget(self.label_fmt)
         
         # 基础格式转换组
         basic_group = self.create_conversion_group("基础格式转换", [
@@ -84,7 +75,7 @@ class ConverterPanel(QWidget):
             ("JSON → YOLO检测", "json", "yolo"),
             ("JSON → VOC", "json", "voc"),
         ])
-        scroll_layout.addWidget(basic_group)
+        main_layout.addWidget(basic_group)
         
         # 分割格式转换组
         seg_group = self.create_conversion_group("分割格式转换", [
@@ -92,15 +83,13 @@ class ConverterPanel(QWidget):
             ("JSON → YOLO分割", "json", "yolo_seg"),
             ("YOLO分割 → YOLO检测", "yolo_seg", "yolo"),
         ])
-        scroll_layout.addWidget(seg_group)
+        main_layout.addWidget(seg_group)
 
         # 工具按钮组
         tools_group = self.create_tools_group()
-        scroll_layout.addWidget(tools_group)
+        main_layout.addWidget(tools_group)
         
-        # 设置滚动内容
-        scroll_area.setWidget(scroll_content)
-        main_layout.addWidget(scroll_area)
+        main_layout.addStretch()
 
         # 日志输出 - 固定在底部
         self.log_view = QTextEdit()

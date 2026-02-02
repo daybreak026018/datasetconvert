@@ -6,15 +6,20 @@ class AppStyles:
     """应用程序样式定义"""
     
     # 颜色定义
-    PRIMARY_COLOR = "#2196F3"      # 主色调 - 蓝色
-    SUCCESS_COLOR = "#4CAF50"      # 成功色 - 绿色
-    WARNING_COLOR = "#FF9800"      # 警告色 - 橙色
-    DANGER_COLOR = "#F44336"       # 危险色 - 红色
-    BACKGROUND_COLOR = "#F5F5F5"   # 背景色 - 浅灰
-    CARD_COLOR = "#FFFFFF"         # 卡片色 - 白色
-    TEXT_COLOR = "#212121"         # 文本色 - 深灰
-    SECONDARY_TEXT = "#757575"     # 次要文本 - 中灰
-    BORDER_COLOR = "#E0E0E0"       # 边框色 - 浅灰
+    PRIMARY_COLOR = "#2ecc71"      # 主色调 - 绿色
+    SUCCESS_COLOR = "#2ecc71"      # 成功色 - 绿色
+    WARNING_COLOR = "#f1c40f"      # 警告色 - 黄色
+    DANGER_COLOR = "#e74c3c"       # 危险色 - 红色
+    BACKGROUND_COLOR = "#ecf0f1"   # 背景色 - 浅灰
+    CARD_COLOR = "#ffffff"         # 卡片色 - 白色
+    TEXT_COLOR = "#2c3e50"         # 文本色 - 深蓝灰
+    SECONDARY_TEXT = "#7f8c8d"     # 次要文本 - 灰
+    BORDER_COLOR = "#bdc3c7"       # 边框色 - 浅灰
+    
+    # 侧边栏和头部颜色
+    SIDEBAR_BG = "#2c3e50"         # 侧边栏背景 - 深色
+    SIDEBAR_TEXT = "#ecf0f1"       # 侧边栏文字 - 浅色
+    HEADER_BG = "#27ae60"          # 头部背景 - 深绿色
     
     @staticmethod
     def get_main_window_style():
@@ -22,36 +27,81 @@ class AppStyles:
         return f"""
         QMainWindow {{
             background-color: {AppStyles.BACKGROUND_COLOR};
-            font-family: "SimSun", "宋体", serif;
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
         }}
         
-        QListWidget {{
+        /* 侧边栏样式 */
+        QFrame#sidebar {{
+            background-color: {AppStyles.SIDEBAR_BG};
+            border: none;
+        }}
+        
+        /* 顶部标题栏样式 */
+        QFrame#header {{
+            background-color: {AppStyles.HEADER_BG};
+            border: none;
+        }}
+        
+        QLabel#headerTitle {{
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            padding-left: 20px;
+        }}
+        
+        /* 导航按钮通用样式 */
+        QFrame#navButton {{
+            background-color: transparent;
+            border: none;
+            border-radius: 0px;
+            margin: 0px;
+            padding: 0px;
+        }}
+        
+        QFrame#navButton:hover {{
+            background-color: #34495e;  /* 稍微亮一点的深色 */
+        }}
+        
+        /* 选中状态 */
+        QFrame#navButton[selected="true"] {{
+            background-color: #27ae60;  /* 绿色高亮 */
+            border-left: 4px solid #2ecc71;
+        }}
+        
+        /* 图标标签 */
+        QLabel[class="navIcon"] {{
+            background-color: transparent;
+            padding: 0px;
+        }}
+        
+        /* 文字标签 */
+        QLabel[class="navText"] {{
+            color: {AppStyles.SIDEBAR_TEXT};
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+        }}
+        
+        /* 选中状态下的文字颜色 */
+        QFrame#navButton[selected="true"] QLabel[class="navText"] {{
+            color: white;
+            font-weight: bold;
+        }}
+        
+        /* 内容区域卡片 */
+        QGroupBox, QScrollArea, QListWidget {{
             background-color: {AppStyles.CARD_COLOR};
             border: 1px solid {AppStyles.BORDER_COLOR};
-            border-radius: 8px;
-            padding: 8px;
-            font-size: 14px;
-            font-family: "SimSun", "宋体", serif;
+            border-radius: 4px;
         }}
         
-        QListWidget::item {{
-            height: 45px;
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin: 2px 0px;
-        }}
-        
-        QListWidget::item:selected {{
-            background-color: {AppStyles.PRIMARY_COLOR};
-            color: white;
-        }}
-        
-        QListWidget::item:hover {{
-            background-color: #E3F2FD;
-        }}
-        
-        QFrame {{
-            border: 1px solid {AppStyles.BORDER_COLOR};
+        /* 分割线样式 */
+        QFrame[class="navSeparator"] {{
+            color: #D1D5DB;  /* 浅灰色 */
+            border: none;
+            background-color: #E9ECEF;
+            width: 1px;
+            margin: 0px 5px;
         }}
         """
     
@@ -89,21 +139,47 @@ class AppStyles:
             background-color: transparent;
         }}
         
-        QScrollBar:vertical {{
+        QScrollBar:vertical {
             background-color: {AppStyles.BACKGROUND_COLOR};
-            width: 12px;
-            border-radius: 6px;
-        }}
+            width: 10px;
+            border-radius: 5px;
+            margin: 0px;
+        }
         
-        QScrollBar::handle:vertical {{
+        QScrollBar::handle:vertical {
             background-color: {AppStyles.BORDER_COLOR};
-            border-radius: 6px;
+            border-radius: 5px;
             min-height: 20px;
-        }}
+        }
         
-        QScrollBar::handle:vertical:hover {{
+        QScrollBar::handle:vertical:hover {
             background-color: {AppStyles.SECONDARY_TEXT};
-        }}
+        }
+
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+
+        QScrollBar:horizontal {
+            background-color: {AppStyles.BACKGROUND_COLOR};
+            height: 10px;
+            border-radius: 5px;
+            margin: 0px;
+        }
+        
+        QScrollBar::handle:horizontal {
+            background-color: {AppStyles.BORDER_COLOR};
+            border-radius: 5px;
+            min-width: 20px;
+        }
+        
+        QScrollBar::handle:horizontal:hover {
+            background-color: {AppStyles.SECONDARY_TEXT};
+        }
+
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0px;
+        }
         """
     
     @staticmethod

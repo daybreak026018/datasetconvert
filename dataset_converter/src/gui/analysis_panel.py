@@ -2,9 +2,9 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTextEdit, QFileDialog, QMessageBox, QProgressBar, QComboBox,
     QSpinBox, QCheckBox, QGroupBox, QGridLayout, QInputDialog,
-    QScrollArea
+    QScrollArea, QFrame
 )
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from pathlib import Path
 import json
 import copy
@@ -54,8 +54,10 @@ class AnalysisPanel(QWidget):
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(2)  # 总是显示垂直滚动条
-        scroll_area.setHorizontalScrollBarPolicy(1)  # 根据需要显示水平滚动条
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 禁止水平滑动
+        scroll_area.setFrameShape(QFrame.NoFrame)  # 移除边框，防止看起来像滑动组件
+        scroll_area.setStyleSheet("background: transparent;")
         
         # 创建滚动内容容器
         scroll_content = QWidget()
