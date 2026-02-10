@@ -23,7 +23,7 @@ class SimpleHomeWindow(QMainWindow):
     
     def init_ui(self):
         """初始化界面"""
-        self.setWindowTitle("DataForge v2.2.0 - 数据集工具箱")
+        self.setWindowTitle("DataForge - 数据集工具箱")
         self.setMinimumSize(1000, 700)
         self.resize(1200, 800)
         
@@ -66,24 +66,9 @@ class SimpleHomeWindow(QMainWindow):
         nav_layout.setContentsMargins(0, 0, 0, 0)
         nav_layout.setSpacing(0)
         
-        # 标题区域
-        title_widget = QWidget()
-        title_widget.setObjectName("titleWidget")
-        title_layout = QVBoxLayout(title_widget)
-        title_layout.setContentsMargins(20, 20, 20, 10)
-        
-        # 应用标题
-        app_title = QLabel("DataForge")
-        app_title.setObjectName("appTitle")
-        
-        # 版本信息
-        version_label = QLabel("v2.2.0")
-        version_label.setObjectName("versionLabel")
-        
-        title_layout.addWidget(app_title)
-        title_layout.addWidget(version_label)
-        
-        nav_layout.addWidget(title_widget)
+        # 顶部标题已移除，仅保留导航项以保持侧栏整洁
+        # 增加上边距使导航项与窗口边缘保持间距
+        nav_layout.setContentsMargins(0, 12, 0, 0)
         
         # 导航菜单
         self.nav_menu = QListWidget()

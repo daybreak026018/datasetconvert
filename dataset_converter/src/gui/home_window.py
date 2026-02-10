@@ -88,24 +88,14 @@ class HomeWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
         
-        # 侧边栏 Logo 区域
-        logo_area = QFrame()
-        logo_area.setFixedHeight(60)
-        logo_area.setStyleSheet("background-color: #27ae60; border-bottom: 1px solid #2ecc71;") # 稍微深一点的绿色
-        logo_layout = QHBoxLayout(logo_area)
-        logo_layout.setContentsMargins(20, 0, 0, 0)
-        
-        logo_label = QLabel("DataForge")
-        logo_label.setStyleSheet("color: white; font-size: 20px; font-weight: bold; font-family: 'Segoe UI', sans-serif;")
-        logo_layout.addWidget(logo_label)
-        
-        sidebar_layout.addWidget(logo_area)
+        # 已移除侧边栏 Logo 区域，保持侧栏整洁，仅显示导航项
+        # 增加顶部间距使第一个导航项与窗口顶部保持合理距离
         
         # 导航按钮容器
         self.nav_buttons = []
         nav_container = QWidget()
         nav_layout = QVBoxLayout(nav_container)
-        nav_layout.setContentsMargins(0, 10, 0, 0)
+        nav_layout.setContentsMargins(0, 20, 0, 0)
         nav_layout.setSpacing(2)
         nav_layout.setAlignment(Qt.AlignTop)
         

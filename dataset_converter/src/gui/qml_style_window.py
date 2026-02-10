@@ -95,24 +95,9 @@ class AnimatedButton(QPushButton):
         
         current_rect = self.geometry()
         if hover:
-            # 轻微放大效果
-            new_rect = QRect(
-                current_rect.x() - 2,
-                current_rect.y() - 1,
-                current_rect.width() + 4,
-                current_rect.height() + 2
-            )
-        else:
-            # 恢复原始大小
-            new_rect = QRect(
-                current_rect.x() + 2,
-                current_rect.y() + 1,
-                current_rect.width() - 4,
-                current_rect.height() - 2
-            )
-        
-        self.hover_animation.setStartValue(current_rect)
-        self.hover_animation.setEndValue(new_rect)
+            # 顶部品牌区域已移除，仅保留导航项以保持侧栏整洁
+            # 保留少量上边距使导航项与窗口边缘有间距
+            layout.setContentsMargins(0, 12, 0, 0)
         self.hover_animation.start()
     
     def animate_click(self):
@@ -348,7 +333,7 @@ class QMLStyleWindow(QMainWindow):
     
     def init_ui(self):
         """初始化UI"""
-        self.setWindowTitle("DataForge v2.2.0 - 现代化数据集工具")
+        self.setWindowTitle("现代化数据集工具")
         self.setMinimumSize(1400, 900)  # 增加最小尺寸
         self.resize(1600, 1000)  # 增加默认尺寸
         
@@ -384,24 +369,8 @@ class QMLStyleWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # 顶部品牌区域
-        brand_widget = QWidget()
-        brand_widget.setObjectName("brandWidget")
-        brand_layout = QVBoxLayout(brand_widget)
-        brand_layout.setContentsMargins(24, 32, 24, 24)
-        brand_layout.setSpacing(8)
-        
-        # 应用标题
-        app_title = QLabel("DataForge")
-        app_title.setObjectName("appTitle")
-        brand_layout.addWidget(app_title)
-        
-        # 版本标签
-        version_label = QLabel("v2.2.0")
-        version_label.setObjectName("versionLabel")
-        brand_layout.addWidget(version_label)
-        
-        layout.addWidget(brand_widget)
+        # 顶部品牌区域已移除，仅保留导航项以保持侧栏整洁
+        layout.setContentsMargins(0, 12, 0, 0)
         
         # 导航菜单
         nav_scroll = QScrollArea()
@@ -567,25 +536,7 @@ class QMLStyleWindow(QMainWindow):
             border-right: 1px solid #e2e8f0;
         }
         
-        /* 品牌区域 */
-        #brandWidget {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #3b82f6, stop:1 #1d4ed8);
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        #appTitle {
-            font-size: 28px;
-            font-weight: 700;
-            color: white;
-            margin: 0;
-        }
-        
-        #versionLabel {
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.8);
-            margin: 0;
-        }
+        /* 顶部品牌区域已移除，侧栏保持简洁，仅显示导航项 */
         
         /* 导航滚动区域 */
         #navScroll {

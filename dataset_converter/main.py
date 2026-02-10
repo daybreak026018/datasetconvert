@@ -4,6 +4,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 
 from src.gui.qml_style_window import QMLStyleWindow
+from src.gui.simple_home_window import SimpleHomeWindow
 
 
 def ensure_data_dirs():
@@ -17,12 +18,12 @@ def main():
     app = QApplication(sys.argv)
     
     # 设置应用程序属性
-    app.setApplicationName("DataForge")
-    app.setApplicationVersion("2.2.0")
-    app.setOrganizationName("DataForge Team")
+    #app.setApplicationName("DataForge")
+    #app.setApplicationVersion("2.2.0")
+    #app.setOrganizationName("DataForge Team")
     
     # 创建并显示主窗口
-    window = QMLStyleWindow()
+    window = SimpleHomeWindow()
     window.show()
     
     sys.exit(app.exec_())

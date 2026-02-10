@@ -404,6 +404,155 @@ class QMLConverterPanel(QWidget):
     def on_input_path_changed(self, path):
         """输入路径改变"""
         self.input_path = path
+        
+        # 自动分析数据集
+        self.analyze_dataset(path)
+    
+    def analyze_dataset(self, path):
+        """分析数据集格式和内容"""
+        try:
+            dataset_path = Path(path)
+            
+            # 检测数据集格式
+            detected_format = self.detect_dataset_format(dataset_path)
+            
+            if detected_format:
+                # 自动设置输入格式
+                format_index = self.input_format_combo.findText(detected_format)
+                if format_index >= 0:
+                    self.input_format_combo.setCurrentIndex(format_index)
+                
+                # 显示检测结果
+                self.show_dataset_info(dataset_path, detected_format)
+                
+                # 智能建议输出格式
+                self.suggest_output_format(detected_format)
+            else:
+                # 显示未知格式提示
+                QMessageBox.information(
+                    self, "数据集分析", 
+                    f"已选择数据集: {dataset_path.name}\n\n"
+                    "未能自动检测格式，请手动选择输入格式。"
+                )
+        
+        except Exception as e:
+            QMessageBox.warning(self, "分析错误", f"分析数据集时出错: {str(e)}")
+    
+    def detect_dataset_format(self, dataset_path):
+        """检测数据集格式"""
+        try:
+            # 检查文件类型
+            txt_files = list(dataset_path.glob("*.txt"))
+            xml_files = list(dataset_path.glob("*.xml"))
+            json_files = list(dataset_path.glob("*.json"))
+            
+            # YOLO格式检测
+            if txt_files and any(f.name != "classes.txt" for f in txt_files):
+                # 检查是否有classes.txt或类似文件
+                if any(f.name in ["classes.txt", "names.txt", "obj.names"] for f in txt_files):
+                    return "YOLO"
+                # 检查txt文件内容格式
+                for txt_file in txt_files[:3]:  # 检查前3个文件
+                    try:
+                        with open(txt_file, 'r') as f:
+                            line = f.readline().strip()
+                            if line and len(line.split()) >= 5:
+                                # YOLO格式: class_id x_center y_center width height
+                                parts = line.split()
+                                if all(self.is_float(p) for p in parts[1:5]):
+                                    return "YOLO"
+                    except:
+                        continue
+            
+            # VOC格式检测
+            if xml_files:
+                for xml_file in xml_files[:3]:
+                    try:
+                        import xml.etree.ElementTree as ET
+                        tree = ET.parse(xml_file)
+                        root = tree.getroot()
+                        if root.tag == "annotation" and root.find("object") is not None:
+                            return "VOC"
+                    except:
+                        continue
+            
+            # COCO格式检测
+            if json_files:
+                for json_file in json_files:
+                    try:
+                        import json
+                        with open(json_file, 'r') as f:
+                            data = json.load(f)
+                            if isinstance(data, dict) and "annotations" in data and "images" in data:
+                                return "COCO"
+                    except:
+                        continue
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def is_float(self, value):
+        """检查是否为浮点数"""
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+    
+    def show_dataset_info(self, dataset_path, detected_format):
+        """显示数据集信息"""
+        try:
+            # 统计文件数量
+            image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+            image_files = []
+            for ext in image_extensions:
+                image_files.extend(dataset_path.glob(f"*{ext}"))
+                image_files.extend(dataset_path.glob(f"*{ext.upper()}"))
+            
+            annotation_files = []
+            if detected_format == "YOLO":
+                annotation_files = list(dataset_path.glob("*.txt"))
+                annotation_files = [f for f in annotation_files if f.name not in ["classes.txt", "names.txt", "obj.names"]]
+            elif detected_format == "VOC":
+                annotation_files = list(dataset_path.glob("*.xml"))
+            elif detected_format == "COCO":
+                annotation_files = list(dataset_path.glob("*.json"))
+            
+            # 显示信息对话框
+            info_msg = f"""🎉 数据集分析完成！
+
+📁 数据集: {dataset_path.name}
+📊 检测格式: {detected_format}
+🖼️ 图片数量: {len(image_files)}
+🏷️ 标注数量: {len(annotation_files)}
+
+✅ 已自动设置输入格式为 {detected_format}
+💡 建议选择合适的输出格式后开始转换"""
+            
+            QMessageBox.information(self, "数据集分析结果", info_msg)
+            
+        except Exception as e:
+            QMessageBox.information(
+                self, "数据集分析", 
+                f"检测到格式: {detected_format}\n已自动设置输入格式。"
+            )
+    
+    def suggest_output_format(self, input_format):
+        """智能建议输出格式"""
+        suggestions = {
+            "YOLO": "VOC",  # YOLO -> VOC 常见转换
+            "VOC": "YOLO",  # VOC -> YOLO 常见转换
+            "COCO": "YOLO", # COCO -> YOLO 常见转换
+            "JSON": "YOLO"  # JSON -> YOLO 常见转换
+        }
+        
+        if input_format in suggestions:
+            suggested_format = suggestions[input_format]
+            format_index = self.output_format_combo.findText(suggested_format)
+            if format_index >= 0:
+                self.output_format_combo.setCurrentIndex(format_index)
     
     def on_output_path_changed(self, path):
         """输出路径改变"""
