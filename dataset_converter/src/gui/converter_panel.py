@@ -1,6 +1,8 @@
+import json
+from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSettings, Qt
 from PyQt5.QtWidgets import (
     QFrame,
     QFileDialog,
@@ -22,6 +24,15 @@ from ..utils.logger import get_logger
 class ConverterPanel(QWidget):
     """Rebuilt spacious converter page with the original conversion logic."""
 
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
+    LABEL_EXTENSIONS_BY_FORMAT = {
+        "yolo": {".txt"},
+        "yolo_seg": {".txt"},
+        "voc": {".xml"},
+        "json": {".json"},
+    }
+    MAX_RECENT_TASKS = 8
+
     FORMAT_LABELS = {
         "yolo": "YOLO检测",
         "yolo_seg": "YOLO分割",
@@ -38,7 +49,10 @@ class ConverterPanel(QWidget):
         self.output_fmt = "voc"
         self.label_map = {}
         self.conversion_buttons = []
+        self.conversion_groups = []
         self.current_selected_button = None
+        self.settings = QSettings("DataForge", "DatasetConverter")
+        self._active_task_started_at = None
         self._build_ui()
         self.set_formats("yolo", "voc", auto_select_button=True)
 
@@ -109,12 +123,22 @@ class ConverterPanel(QWidget):
         btn_label_map.setMinimumHeight(34)
         btn_label_map.clicked.connect(self.on_load_label_map)
 
+        btn_precheck = QPushButton("转换预检")
+        btn_precheck.setMinimumHeight(34)
+        btn_precheck.clicked.connect(self.on_precheck)
+
+        btn_recent = QPushButton("最近任务")
+        btn_recent.setMinimumHeight(34)
+        btn_recent.clicked.connect(self.show_recent_tasks)
+
         btn_convert = QPushButton("开始转换")
         btn_convert.setProperty("buttonType", "success")
         btn_convert.setMinimumHeight(34)
         btn_convert.clicked.connect(self.on_convert)
 
         tools_layout.addWidget(btn_label_map)
+        tools_layout.addWidget(btn_precheck)
+        tools_layout.addWidget(btn_recent)
         tools_layout.addWidget(btn_convert)
         tools_layout.addStretch()
         root_layout.addWidget(tools_group)
@@ -151,17 +175,19 @@ class ConverterPanel(QWidget):
         layout.setHorizontalSpacing(10)
         layout.setVerticalSpacing(8)
 
+        group_buttons = []
         for i, (text, inp_fmt, out_fmt) in enumerate(conversions):
             btn = QPushButton(text)
             btn.setCheckable(True)
             btn.setMinimumHeight(36)
-            btn.setMinimumWidth(120)
+            btn.setMinimumWidth(96)
             btn.clicked.connect(
                 lambda checked, i=inp_fmt, o=out_fmt, b=btn: self.set_formats(i, o, b)
             )
             btn.input_format = inp_fmt
             btn.output_format = out_fmt
             self.conversion_buttons.append(btn)
+            group_buttons.append(btn)
 
             row = i // 2
             col = i % 2
@@ -170,7 +196,26 @@ class ConverterPanel(QWidget):
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(1, 1)
         outer_layout.addWidget(option_wrap)
+        self.conversion_groups.append((layout, group_buttons))
         return group
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_conversion_layouts()
+
+    def update_conversion_layouts(self):
+        use_single_column = self.width() < 620
+        columns = 1 if use_single_column else 2
+
+        for layout, buttons in self.conversion_groups:
+            for button in buttons:
+                layout.removeWidget(button)
+            for index, button in enumerate(buttons):
+                row = index // columns
+                col = index % columns
+                layout.addWidget(button, row, col)
+            for column in range(2):
+                layout.setColumnStretch(column, 1 if column < columns else 0)
 
     def choose_input(self):
         directory = QFileDialog.getExistingDirectory(self, "选择输入目录", str(Path.cwd()))
@@ -260,10 +305,43 @@ class ConverterPanel(QWidget):
         self.log_view.append(msg)
         self.logger.info(msg)
 
+    def on_precheck(self):
+        if not self.input_dir:
+            QMessageBox.warning(self, "提示", "请先选择输入目录")
+            return
+
+        report = self._build_precheck_report()
+        self.append_log(self._format_precheck_report(report))
+        if report["blockers"]:
+            QMessageBox.warning(self, "预检未通过", "\n".join(report["blockers"]))
+        elif report["warnings"]:
+            QMessageBox.information(self, "预检完成", "发现提醒项，详情已写入日志。")
+        else:
+            QMessageBox.information(self, "预检完成", "未发现明显问题，可以开始转换。")
+
     def on_convert(self):
         if not self.input_dir or not self.output_dir:
             QMessageBox.warning(self, "提示", "请先选择输入目录和输出目录")
             return
+
+        report = self._build_precheck_report()
+        self.append_log(self._format_precheck_report(report))
+        if report["blockers"]:
+            QMessageBox.warning(self, "预检未通过", "\n".join(report["blockers"]))
+            return
+        if report["warnings"]:
+            choice = QMessageBox.question(
+                self,
+                "预检提醒",
+                "预检发现一些提醒项：\n"
+                + "\n".join(report["warnings"][:6])
+                + "\n\n是否继续转换？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if choice != QMessageBox.Yes:
+                self.append_log("已取消转换：用户在预检提醒处停止。")
+                return
 
         from ..utils.worker_thread import run_with_progress
 
@@ -271,6 +349,18 @@ class ConverterPanel(QWidget):
         outp_name = self.FORMAT_LABELS.get(self.output_fmt, self.output_fmt)
 
         self.append_log(f"开始转换：{inp_name} -> {outp_name}")
+        self._active_task_started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._upsert_recent_task(
+            {
+                "started_at": self._active_task_started_at,
+                "input_dir": str(self.input_dir),
+                "output_dir": str(self.output_dir),
+                "input_format": inp_name,
+                "output_format": outp_name,
+                "status": "进行中",
+                "summary": self._precheck_summary(report),
+            }
+        )
         title = f"数据集转换：{inp_name} -> {outp_name}"
         run_with_progress(
             self,
@@ -317,7 +407,150 @@ class ConverterPanel(QWidget):
 
     def on_task_finished(self, result):
         self.append_log("转换完成")
+        if self._active_task_started_at:
+            self._upsert_recent_task({"started_at": self._active_task_started_at, "status": "完成"})
+            self._active_task_started_at = None
         QMessageBox.information(self, "完成", "转换任务已完成")
+
+    def on_task_error(self, error_msg: str):
+        if self._active_task_started_at:
+            self._upsert_recent_task(
+                {
+                    "started_at": self._active_task_started_at,
+                    "status": "失败",
+                    "summary": f"转换失败：{error_msg}",
+                }
+            )
+            self._active_task_started_at = None
+
+    def _build_precheck_report(self):
+        report = {
+            "input_dir": str(self.input_dir) if self.input_dir else "",
+            "output_dir": str(self.output_dir) if self.output_dir else "",
+            "images": 0,
+            "labels": 0,
+            "paired_images": 0,
+            "orphan_images": 0,
+            "orphan_labels": 0,
+            "empty_labels": 0,
+            "warnings": [],
+            "blockers": [],
+        }
+
+        if not self.input_dir or not self.input_dir.exists() or not self.input_dir.is_dir():
+            report["blockers"].append("输入目录不存在或不可访问。")
+            return report
+
+        label_exts = self.LABEL_EXTENSIONS_BY_FORMAT.get(self.input_fmt, {".txt", ".json", ".xml"})
+        image_files = [
+            item
+            for item in self.input_dir.rglob("*")
+            if item.is_file() and item.suffix.lower() in self.IMAGE_EXTENSIONS
+        ]
+        label_files = [
+            item
+            for item in self.input_dir.rglob("*")
+            if item.is_file() and item.suffix.lower() in label_exts
+        ]
+        image_stems = {item.stem for item in image_files}
+        label_stems = {item.stem for item in label_files}
+
+        report["images"] = len(image_files)
+        report["labels"] = len(label_files)
+        report["paired_images"] = len(image_stems & label_stems)
+        report["orphan_images"] = len(image_stems - label_stems)
+        report["orphan_labels"] = len(label_stems - image_stems)
+        report["empty_labels"] = sum(1 for item in label_files if item.stat().st_size == 0)
+
+        if not image_files and not label_files:
+            report["blockers"].append("输入目录没有识别到可转换的数据文件。")
+        if self.output_dir:
+            output_parent = self.output_dir if self.output_dir.exists() else self.output_dir.parent
+            if not output_parent.exists():
+                report["blockers"].append("输出目录的上级目录不存在。")
+        if not label_files:
+            report["warnings"].append("未找到当前输入格式对应的标注文件。")
+        if report["orphan_images"] > 0:
+            report["warnings"].append(f"有 {report['orphan_images']} 张图像缺少同名标注。")
+        if report["orphan_labels"] > 0:
+            report["warnings"].append(f"有 {report['orphan_labels']} 个标注文件缺少同名图像。")
+        if report["empty_labels"] > 0:
+            report["warnings"].append(f"有 {report['empty_labels']} 个空标注文件，请确认是否为负样本。")
+        if self.input_fmt in {"yolo", "yolo_seg"} and not self.label_map:
+            report["warnings"].append("YOLO 输入未加载标签字典，类别名可能只能按编号处理。")
+
+        return report
+
+    def _format_precheck_report(self, report):
+        lines = [
+            "",
+            "转换预检",
+            f"输入目录: {report['input_dir']}",
+            f"输出目录: {report['output_dir'] or '未选择'}",
+            f"图像文件: {report['images']}",
+            f"标注文件: {report['labels']}",
+            f"完整配对: {report['paired_images']}",
+            f"缺少标注的图像: {report['orphan_images']}",
+            f"缺少图像的标注: {report['orphan_labels']}",
+            f"空标注文件: {report['empty_labels']}",
+        ]
+        if report["blockers"]:
+            lines.append("阻断问题:")
+            lines.extend(f"- {item}" for item in report["blockers"])
+        if report["warnings"]:
+            lines.append("提醒:")
+            lines.extend(f"- {item}" for item in report["warnings"])
+        if not report["blockers"] and not report["warnings"]:
+            lines.append("结果: 未发现明显问题。")
+        return "\n".join(lines)
+
+    def _precheck_summary(self, report):
+        if report["blockers"]:
+            return f"预检阻断 {len(report['blockers'])} 项"
+        if report["warnings"]:
+            return f"预检提醒 {len(report['warnings'])} 项"
+        return "预检通过"
+
+    def _load_recent_tasks(self):
+        raw = self.settings.value("recent_tasks", "[]")
+        try:
+            tasks = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        return tasks if isinstance(tasks, list) else []
+
+    def _save_recent_tasks(self, tasks):
+        self.settings.setValue("recent_tasks", json.dumps(tasks[: self.MAX_RECENT_TASKS], ensure_ascii=False))
+
+    def _upsert_recent_task(self, task_update):
+        tasks = self._load_recent_tasks()
+        started_at = task_update.get("started_at")
+        for task in tasks:
+            if task.get("started_at") == started_at:
+                task.update(task_update)
+                self._save_recent_tasks(tasks)
+                return
+        tasks.insert(0, task_update)
+        self._save_recent_tasks(tasks)
+
+    def show_recent_tasks(self):
+        tasks = self._load_recent_tasks()
+        if not tasks:
+            self.append_log("\n最近任务\n暂无记录。")
+            return
+
+        lines = ["", "最近任务"]
+        for index, task in enumerate(tasks[: self.MAX_RECENT_TASKS], 1):
+            lines.append(
+                f"{index}. {task.get('started_at', '-')}"
+                f" [{task.get('status', '-')}] "
+                f"{task.get('input_format', '')} -> {task.get('output_format', '')}"
+            )
+            lines.append(f"   输入: {task.get('input_dir', '-')}")
+            lines.append(f"   输出: {task.get('output_dir', '-')}")
+            if task.get("summary"):
+                lines.append(f"   备注: {task['summary']}")
+        self.append_log("\n".join(lines))
 
     def on_load_label_map(self):
         file_path, _ = QFileDialog.getOpenFileName(

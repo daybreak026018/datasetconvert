@@ -1,7 +1,9 @@
 """
-Light-green dataset analysis panel.
+Blue-white dataset analysis panel.
 """
 
+import json
+from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
@@ -96,9 +98,14 @@ class SimpleAnalysisPanel(QWidget):
         summary_button.setMinimumHeight(46)
         summary_button.clicked.connect(self.generate_summary)
 
+        export_button = QPushButton("导出报告")
+        export_button.setMinimumHeight(46)
+        export_button.clicked.connect(self.export_report)
+
         action_layout.addWidget(scan_button)
         action_layout.addWidget(quality_button)
         action_layout.addWidget(summary_button)
+        action_layout.addWidget(export_button)
         action_layout.addStretch()
         root_layout.addWidget(action_group)
 
@@ -175,6 +182,10 @@ class SimpleAnalysisPanel(QWidget):
             tips.append(f"有 {stats['orphan_images']} 张图像缺少同名标注。")
         if stats["orphan_labels"] > 0:
             tips.append(f"有 {stats['orphan_labels']} 个标注文件找不到对应图像。")
+        if stats["empty_labels"] > 0:
+            tips.append(f"有 {stats['empty_labels']} 个空标注文件，请确认是否为负样本。")
+        if stats["duplicate_stems"] > 0:
+            tips.append(f"发现 {stats['duplicate_stems']} 组同名文件，请确认多级目录下是否存在重复样本。")
         if not tips:
             tips.append("未发现明显的配对问题，可以继续进入下一步处理。")
 
@@ -196,9 +207,47 @@ class SimpleAnalysisPanel(QWidget):
             f"标注文件: {stats['labels']}",
             f"目录层级: {stats['folders']}",
             f"完整配对图像: {stats['paired_images']}",
+            f"空标注文件: {stats['empty_labels']}",
+            f"重复文件名: {stats['duplicate_stems']}",
         ]
         self.report_view.setPlainText("\n".join(summary))
         self.status_label.setText("摘要已生成，可直接作为后续处理前的概览。")
+
+    def export_report(self):
+        if not self.dataset_path:
+            QMessageBox.warning(self, "提示", "请先选择分析目录。")
+            return
+
+        stats = self._scan_dataset(self.dataset_path)
+        default_name = f"dataset_health_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出数据体检报告",
+            str(self.dataset_path / default_name),
+            "JSON Files (*.json);;Text Files (*.txt)",
+        )
+        if not file_path:
+            return
+
+        target = Path(file_path)
+        try:
+            if target.suffix.lower() == ".txt":
+                target.write_text(self._format_stats_report(stats), encoding="utf-8")
+            else:
+                payload = {
+                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "dataset_path": str(self.dataset_path),
+                    "stats": stats,
+                    "tips": self._build_quality_tips(stats),
+                }
+                target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            QMessageBox.critical(self, "错误", f"报告导出失败：{exc}")
+            return
+
+        self.status_label.setText(f"体检报告已导出：{target}")
+        self.report_view.setPlainText(self._format_stats_report(stats))
+        QMessageBox.information(self, "完成", "体检报告已导出。")
 
     def _scan_dataset(self, root: Path):
         image_files = [item for item in root.rglob("*") if item.is_file() and item.suffix.lower() in self.IMAGE_EXTENSIONS]
@@ -211,6 +260,7 @@ class SimpleAnalysisPanel(QWidget):
         image_stems = {item.stem for item in image_files}
         label_stems = {item.stem for item in label_files}
         paired_images = len(image_stems & label_stems)
+        duplicate_stems = self._count_duplicate_stems(image_files) + self._count_duplicate_stems(label_files)
 
         return {
             "images": len(image_files),
@@ -219,6 +269,8 @@ class SimpleAnalysisPanel(QWidget):
             "paired_images": paired_images,
             "orphan_images": len(image_stems - label_stems),
             "orphan_labels": len(label_stems - image_stems),
+            "empty_labels": sum(1 for item in label_files if item.stat().st_size == 0),
+            "duplicate_stems": duplicate_stems,
         }
 
     def _format_stats_report(self, stats):
@@ -231,8 +283,42 @@ class SimpleAnalysisPanel(QWidget):
             f"完整配对图像: {stats['paired_images']}",
             f"缺少标注的图像: {stats['orphan_images']}",
             f"缺少图像的标注: {stats['orphan_labels']}",
+            f"空标注文件: {stats['empty_labels']}",
+            f"重复文件名: {stats['duplicate_stems']}",
         ]
+        tips = self._build_quality_tips(stats)
+        if tips:
+            lines.append("")
+            lines.append("处理建议")
+            lines.extend(f"- {item}" for item in tips)
         return "\n".join(lines)
+
+    def _build_quality_tips(self, stats):
+        tips = []
+        if stats["images"] == 0:
+            tips.append("当前目录没有识别到图像文件。")
+        if stats["labels"] == 0:
+            tips.append("当前目录没有识别到标注文件。")
+        if stats["orphan_images"] > 0:
+            tips.append(f"有 {stats['orphan_images']} 张图像缺少同名标注。")
+        if stats["orphan_labels"] > 0:
+            tips.append(f"有 {stats['orphan_labels']} 个标注文件找不到对应图像。")
+        if stats["empty_labels"] > 0:
+            tips.append(f"有 {stats['empty_labels']} 个空标注文件，请确认是否为负样本。")
+        if stats["duplicate_stems"] > 0:
+            tips.append(f"发现 {stats['duplicate_stems']} 组同名文件，请确认是否会覆盖或混淆。")
+        if not tips:
+            tips.append("未发现明显配对问题，可以继续进行格式转换或划分。")
+        return tips
+
+    def _count_duplicate_stems(self, files):
+        seen = set()
+        duplicates = set()
+        for item in files:
+            if item.stem in seen:
+                duplicates.add(item.stem)
+            seen.add(item.stem)
+        return len(duplicates)
 
     def apply_theme(self):
         self.setStyleSheet(

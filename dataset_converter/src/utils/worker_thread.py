@@ -174,6 +174,8 @@ class ProgressDialog(QObject):
         # 显示错误信息
         from PyQt5.QtWidgets import QMessageBox
         QMessageBox.critical(self.parent, "错误", f"操作失败:\n{error_msg}")
+        if hasattr(self.parent, 'on_task_error'):
+            self.parent.on_task_error(error_msg)
     
     def cleanup_worker(self):
         """清理工作线程"""

@@ -63,14 +63,13 @@ class SimpleHomeWindow(QMainWindow):
     """Single-palette blue shell around the tool panels."""
 
     NAV_ITEMS = [
-        ("格式转换", "数据集格式转换与标签映射"),
-        ("数据划分", "训练、验证、测试集划分"),
-        ("数据分析", "快速统计与质量概览"),
-        ("数据可视化", "图表预览与汇总方案"),
-        ("数据搜索", "按名称、类型和子集检索"),
-        ("协作标注", "任务看板与成员协作"),
-        ("高级功能", "批量质检与修复建议"),
-        ("设置", "蓝色固定主题与偏好设置"),
+        ("YOLO首页", "环境、训练、检测和结果概览"),
+        ("数据准备", "YOLO 数据集扫描与 data.yaml 生成"),
+        ("环境检测", "Python、PyTorch、CUDA 与 Ultralytics 状态"),
+        ("模型训练", "本机一键启动 YOLO 训练"),
+        ("模型检测", "选择权重进行图片、视频或目录检测"),
+        ("结果管理", "查看 runs、权重和预测输出"),
+        ("设置", "YOLO Studio 偏好与说明"),
     ]
 
     def __init__(self):
@@ -106,7 +105,7 @@ class SimpleHomeWindow(QMainWindow):
         AppStyles.HEADER_TEXT = colors["header_text"]
 
     def _build_ui(self):
-        self.setWindowTitle("DataForge - 数据集工具箱")
+        self.setWindowTitle("DataForge YOLO Studio")
         self.setMinimumSize(720, 480)
         self.resize(920, 560)
 
@@ -130,6 +129,7 @@ class SimpleHomeWindow(QMainWindow):
         self.sidebar_layout.setSpacing(10)
 
         nav_container = QWidget()
+        nav_container.setObjectName("navContainer")
         self.nav_layout = QVBoxLayout(nav_container)
         self.nav_layout.setContentsMargins(0, 0, 0, 0)
         self.nav_layout.setSpacing(8)
@@ -141,7 +141,14 @@ class SimpleHomeWindow(QMainWindow):
             self.nav_layout.addWidget(card)
 
         self.nav_layout.addStretch()
-        self.sidebar_layout.addWidget(nav_container, 1)
+
+        self.nav_scroll = QScrollArea()
+        self.nav_scroll.setObjectName("navScroll")
+        self.nav_scroll.setWidgetResizable(True)
+        self.nav_scroll.setFrameShape(QFrame.NoFrame)
+        self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.nav_scroll.setWidget(nav_container)
+        self.sidebar_layout.addWidget(self.nav_scroll, 1)
 
         root_layout.addWidget(self.sidebar)
 
@@ -157,9 +164,9 @@ class SimpleHomeWindow(QMainWindow):
         self.header_layout.setContentsMargins(18, 14, 18, 14)
         self.header_layout.setSpacing(4)
 
-        self.page_title = QLabel("格式转换")
+        self.page_title = QLabel("YOLO首页")
         self.page_title.setObjectName("pageTitle")
-        self.page_desc = QLabel("数据集格式转换与标签映射")
+        self.page_desc = QLabel("环境、训练、检测和结果概览")
         self.page_desc.setObjectName("pageDesc")
         self.page_desc.setWordWrap(True)
 
@@ -188,24 +195,24 @@ class SimpleHomeWindow(QMainWindow):
         root_layout.addWidget(self.content_wrap, 1)
 
     def _build_panels(self):
-        from .converter_panel import ConverterPanel
-        from .simple_advanced_panel import SimpleAdvancedPanel
-        from .simple_analysis_panel import SimpleAnalysisPanel
-        from .simple_collaboration_panel import SimpleCollaborationPanel
-        from .simple_search_panel import SimpleSearchPanel
-        from .simple_settings_panel import SimpleSettingsPanel
-        from .simple_splitting_panel import SimpleSplittingPanel
-        from .simple_visualization_panel import SimpleVisualizationPanel
+        from .yolo_panels import (
+            YOLODataPanel,
+            YOLOEnvironmentPanel,
+            YOLOHomePanel,
+            YOLOPredictPanel,
+            YOLORunsPanel,
+            YOLOSettingsPanel,
+            YOLOTrainingPanel,
+        )
 
         self.panels = [
-            ConverterPanel(self),
-            SimpleSplittingPanel(self),
-            SimpleAnalysisPanel(self),
-            SimpleVisualizationPanel(self),
-            SimpleSearchPanel(self),
-            SimpleCollaborationPanel(self),
-            SimpleAdvancedPanel(self),
-            SimpleSettingsPanel(self),
+            YOLOHomePanel(self),
+            YOLODataPanel(self),
+            YOLOEnvironmentPanel(self),
+            YOLOTrainingPanel(self),
+            YOLOPredictPanel(self),
+            YOLORunsPanel(self),
+            YOLOSettingsPanel(self),
         ]
 
         for panel in self.panels:
@@ -232,7 +239,7 @@ class SimpleHomeWindow(QMainWindow):
             current_panel.apply_theme()
 
     def _apply_shell_style(self):
-        green_base = theme_manager.generate_stylesheet("light")
+        blue_base = theme_manager.generate_stylesheet("light")
         shell_style = """
         QWidget#shellRoot {
             background-color: #f4f8fc;
@@ -307,8 +314,17 @@ class SimpleHomeWindow(QMainWindow):
             border: none;
         }
 
+        QScrollArea#navScroll {
+            background-color: transparent;
+            border: none;
+        }
+
+        QWidget#navContainer {
+            background-color: transparent;
+        }
+
         QScrollArea#contentScroll > QWidget > QWidget {
             background-color: transparent;
         }
         """
-        self.setStyleSheet(green_base + shell_style)
+        self.setStyleSheet(blue_base + shell_style)
