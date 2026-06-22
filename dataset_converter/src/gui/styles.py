@@ -1,55 +1,61 @@
 """
-统一的GUI样式管理器
+Shared application styles.
 """
 
+
 class AppStyles:
-    """应用程序样式定义"""
-    
-    # 颜色定义
-    PRIMARY_COLOR = "#2ecc71"      # 主色调 - 绿色
-    SUCCESS_COLOR = "#2ecc71"      # 成功色 - 绿色
-    WARNING_COLOR = "#f1c40f"      # 警告色 - 黄色
-    DANGER_COLOR = "#e74c3c"       # 危险色 - 红色
-    BACKGROUND_COLOR = "#ecf0f1"   # 背景色 - 浅灰
-    CARD_COLOR = "#ffffff"         # 卡片色 - 白色
-    TEXT_COLOR = "#2c3e50"         # 文本色 - 深蓝灰
-    SECONDARY_TEXT = "#7f8c8d"     # 次要文本 - 灰
-    BORDER_COLOR = "#bdc3c7"       # 边框色 - 浅灰
-    
-    # 侧边栏和头部颜色
-    SIDEBAR_BG = "#2c3e50"         # 侧边栏背景 - 深色
-    SIDEBAR_TEXT = "#ecf0f1"       # 侧边栏文字 - 浅色
-    HEADER_BG = "#27ae60"          # 头部背景 - 深绿色
-    
+    """Application style definitions."""
+
+    PRIMARY_COLOR = "#2563EB"
+    SUCCESS_COLOR = "#16A34A"
+    WARNING_COLOR = "#F59E0B"
+    DANGER_COLOR = "#EF4444"
+    BACKGROUND_COLOR = "#F7F9FC"
+    CARD_COLOR = "#FFFFFF"
+    TEXT_COLOR = "#111827"
+    SECONDARY_TEXT = "#6B7280"
+    BORDER_COLOR = "#D6DEEB"
+
+    SIDEBAR_BG = "#FFFFFF"
+    SIDEBAR_TEXT = "#1F2937"
+    SIDEBAR_HOVER = "#F3F7FF"
+    HEADER_BG = "#FFFFFF"
+    HEADER_TEXT = "#111827"
+    NAV_SELECTED_BG = "#E8F0FF"
+    NAV_SELECTED_BORDER = "#2563EB"
+
     @staticmethod
     def get_main_window_style():
-        """主窗口样式"""
         return f"""
         QMainWindow {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
         }}
-        
-        /* 侧边栏样式 */
+
         QFrame#sidebar {{
             background-color: {AppStyles.SIDEBAR_BG};
             border: none;
+            border-right: 1px solid {AppStyles.BORDER_COLOR};
         }}
-        
-        /* 顶部标题栏样式 */
+
         QFrame#header {{
             background-color: {AppStyles.HEADER_BG};
             border: none;
+            border-bottom: 1px solid {AppStyles.BORDER_COLOR};
         }}
-        
+
         QLabel#headerTitle {{
-            color: white;
+            color: {AppStyles.HEADER_TEXT};
             font-size: 18px;
             font-weight: bold;
             padding-left: 20px;
         }}
-        
-        /* 导航按钮通用样式 */
+
+        QLabel#headerUserInfo {{
+            color: {AppStyles.HEADER_TEXT};
+            font-weight: bold;
+        }}
+
         QFrame#navButton {{
             background-color: transparent;
             border: none;
@@ -57,65 +63,58 @@ class AppStyles:
             margin: 0px;
             padding: 0px;
         }}
-        
+
         QFrame#navButton:hover {{
-            background-color: #34495e;  /* 稍微亮一点的深色 */
+            background-color: {AppStyles.SIDEBAR_HOVER};
         }}
-        
-        /* 选中状态 */
+
         QFrame#navButton[selected="true"] {{
-            background-color: #27ae60;  /* 绿色高亮 */
-            border-left: 4px solid #2ecc71;
+            background-color: {AppStyles.NAV_SELECTED_BG};
+            border-left: 4px solid {AppStyles.NAV_SELECTED_BORDER};
         }}
-        
-        /* 图标标签 */
+
         QLabel[class="navIcon"] {{
             background-color: transparent;
             padding: 0px;
         }}
-        
-        /* 文字标签 */
+
         QLabel[class="navText"] {{
             color: {AppStyles.SIDEBAR_TEXT};
             font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
             font-size: 14px;
             font-weight: 500;
         }}
-        
-        /* 选中状态下的文字颜色 */
+
         QFrame#navButton[selected="true"] QLabel[class="navText"] {{
-            color: white;
+            color: {AppStyles.SIDEBAR_TEXT};
             font-weight: bold;
         }}
-        
-        /* 内容区域卡片 */
+
         QGroupBox, QScrollArea, QListWidget {{
             background-color: {AppStyles.CARD_COLOR};
             border: 1px solid {AppStyles.BORDER_COLOR};
             border-radius: 4px;
         }}
-        
-        /* 分割线样式 */
+
         QFrame[class="navSeparator"] {{
-            color: #D1D5DB;  /* 浅灰色 */
+            color: #D1D5DB;
             border: none;
             background-color: #E9ECEF;
             width: 1px;
             margin: 0px 5px;
         }}
         """
-    
+
     @staticmethod
     def get_panel_style():
-        """面板通用样式"""
         return f"""
         QWidget {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             color: {AppStyles.TEXT_COLOR};
-            font-family: "SimSun", "宋体", serif;
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
             font-size: 12px;
         }}
-        
+
         QGroupBox {{
             background-color: {AppStyles.CARD_COLOR};
             border: 2px solid {AppStyles.BORDER_COLOR};
@@ -124,67 +123,65 @@ class AppStyles:
             padding-top: 10px;
             font-weight: bold;
             font-size: 13px;
-            font-family: "SimSun", "宋体", serif;
         }}
-        
+
         QGroupBox::title {{
             subcontrol-origin: margin;
             left: 15px;
-            padding: 0 8px 0 8px;
+            padding: 0 8px;
             color: {AppStyles.PRIMARY_COLOR};
         }}
-        
+
         QScrollArea {{
             border: none;
             background-color: transparent;
         }}
-        
-        QScrollBar:vertical {
+
+        QScrollBar:vertical {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             width: 10px;
             border-radius: 5px;
             margin: 0px;
-        }
-        
-        QScrollBar::handle:vertical {
+        }}
+
+        QScrollBar::handle:vertical {{
             background-color: {AppStyles.BORDER_COLOR};
             border-radius: 5px;
             min-height: 20px;
-        }
-        
-        QScrollBar::handle:vertical:hover {
+        }}
+
+        QScrollBar::handle:vertical:hover {{
             background-color: {AppStyles.SECONDARY_TEXT};
-        }
+        }}
 
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             height: 0px;
-        }
+        }}
 
-        QScrollBar:horizontal {
+        QScrollBar:horizontal {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             height: 10px;
             border-radius: 5px;
             margin: 0px;
-        }
-        
-        QScrollBar::handle:horizontal {
+        }}
+
+        QScrollBar::handle:horizontal {{
             background-color: {AppStyles.BORDER_COLOR};
             border-radius: 5px;
             min-width: 20px;
-        }
-        
-        QScrollBar::handle:horizontal:hover {
-            background-color: {AppStyles.SECONDARY_TEXT};
-        }
+        }}
 
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+        QScrollBar::handle:horizontal:hover {{
+            background-color: {AppStyles.SECONDARY_TEXT};
+        }}
+
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
             width: 0px;
-        }
+        }}
         """
-    
+
     @staticmethod
     def get_button_style(button_type="default"):
-        """按钮样式"""
         styles = {
             "default": f"""
                 QPushButton {{
@@ -194,21 +191,19 @@ class AppStyles:
                     padding: 8px 16px;
                     font-size: 12px;
                     font-weight: 500;
-                    font-family: "SimSun", "宋体", serif;
                     color: {AppStyles.TEXT_COLOR};
                 }}
-                
+
                 QPushButton:hover {{
-                    background-color: #E3F2FD;
+                    background-color: #EEF4FF;
                     border-color: {AppStyles.PRIMARY_COLOR};
                 }}
-                
+
                 QPushButton:pressed {{
                     background-color: {AppStyles.PRIMARY_COLOR};
                     color: white;
                 }}
             """,
-            
             "primary": f"""
                 QPushButton {{
                     background-color: {AppStyles.PRIMARY_COLOR};
@@ -217,19 +212,17 @@ class AppStyles:
                     padding: 10px 20px;
                     font-size: 13px;
                     font-weight: bold;
-                    font-family: "SimSun", "宋体", serif;
                     color: white;
                 }}
-                
+
                 QPushButton:hover {{
-                    background-color: #1976D2;
+                    background-color: #1D4ED8;
                 }}
-                
+
                 QPushButton:pressed {{
-                    background-color: #0D47A1;
+                    background-color: #1E40AF;
                 }}
             """,
-            
             "success": f"""
                 QPushButton {{
                     background-color: {AppStyles.SUCCESS_COLOR};
@@ -238,19 +231,17 @@ class AppStyles:
                     padding: 10px 20px;
                     font-size: 13px;
                     font-weight: bold;
-                    font-family: "SimSun", "宋体", serif;
                     color: white;
                 }}
-                
+
                 QPushButton:hover {{
-                    background-color: #388E3C;
+                    background-color: #15803D;
                 }}
-                
+
                 QPushButton:pressed {{
-                    background-color: #1B5E20;
+                    background-color: #166534;
                 }}
             """,
-            
             "warning": f"""
                 QPushButton {{
                     background-color: {AppStyles.WARNING_COLOR};
@@ -258,16 +249,18 @@ class AppStyles:
                     border-radius: 8px;
                     padding: 8px 16px;
                     font-size: 12px;
-                    font-weight: 500;
-                    font-family: "SimSun", "宋体", serif;
+                    font-weight: bold;
                     color: white;
                 }}
-                
+
                 QPushButton:hover {{
-                    background-color: #F57C00;
+                    background-color: #D97706;
+                }}
+
+                QPushButton:pressed {{
+                    background-color: #B45309;
                 }}
             """,
-            
             "danger": f"""
                 QPushButton {{
                     background-color: {AppStyles.DANGER_COLOR};
@@ -275,144 +268,93 @@ class AppStyles:
                     border-radius: 8px;
                     padding: 8px 16px;
                     font-size: 12px;
-                    font-weight: 500;
-                    font-family: "SimSun", "宋体", serif;
+                    font-weight: bold;
                     color: white;
                 }}
-                
+
                 QPushButton:hover {{
-                    background-color: #D32F2F;
+                    background-color: #DC2626;
                 }}
-            """
+
+                QPushButton:pressed {{
+                    background-color: #B91C1C;
+                }}
+            """,
         }
-        
         return styles.get(button_type, styles["default"])
-    
+
     @staticmethod
     def get_label_style(label_type="default"):
-        """标签样式"""
         styles = {
-            "default": f"""
-                QLabel {{
-                    color: {AppStyles.TEXT_COLOR};
-                    font-size: 12px;
-                    font-family: "SimSun", "宋体", serif;
-                }}
-            """,
-            
-            "title": f"""
-                QLabel {{
-                    color: {AppStyles.PRIMARY_COLOR};
-                    font-size: 14px;
-                    font-weight: bold;
-                    font-family: "SimSun", "宋体", serif;
-                    padding: 5px;
-                }}
-            """,
-            
-            "subtitle": f"""
-                QLabel {{
-                    color: {AppStyles.SECONDARY_TEXT};
-                    font-size: 11px;
-                    font-style: italic;
-                    font-family: "SimSun", "宋体", serif;
-                }}
-            """,
-            
-            "status": f"""
-                QLabel {{
-                    background-color: {AppStyles.CARD_COLOR};
-                    border: 1px solid {AppStyles.BORDER_COLOR};
-                    border-radius: 6px;
-                    padding: 6px 10px;
-                    font-size: 12px;
-                    font-family: "SimSun", "宋体", serif;
-                }}
-            """
+            "default": f"color: {AppStyles.TEXT_COLOR}; font-size: 12px;",
+            "title": f"color: {AppStyles.PRIMARY_COLOR}; font-size: 16px; font-weight: bold;",
+            "subtitle": f"color: {AppStyles.SECONDARY_TEXT}; font-size: 11px;",
+            "status": (
+                f"background-color: {AppStyles.CARD_COLOR};"
+                f"border: 1px solid {AppStyles.BORDER_COLOR};"
+                "border-radius: 6px; padding: 4px 8px;"
+                f"color: {AppStyles.TEXT_COLOR};"
+            ),
         }
-        
         return styles.get(label_type, styles["default"])
-    
+
     @staticmethod
     def get_textedit_style():
-        """文本编辑框样式"""
         return f"""
         QTextEdit {{
             background-color: {AppStyles.CARD_COLOR};
             border: 2px solid {AppStyles.BORDER_COLOR};
             border-radius: 8px;
             padding: 8px;
-            font-family: "SimSun", "宋体", serif;
-            font-size: 11px;
-            line-height: 1.4;
+            color: {AppStyles.TEXT_COLOR};
         }}
-        
+
         QTextEdit:focus {{
             border-color: {AppStyles.PRIMARY_COLOR};
         }}
         """
-    
+
     @staticmethod
     def get_progressbar_style():
-        """进度条样式"""
         return f"""
         QProgressBar {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             border: 2px solid {AppStyles.BORDER_COLOR};
             border-radius: 8px;
             text-align: center;
-            font-size: 11px;
-            font-weight: bold;
-            font-family: "SimSun", "宋体", serif;
+            color: {AppStyles.TEXT_COLOR};
         }}
-        
+
         QProgressBar::chunk {{
             background-color: {AppStyles.PRIMARY_COLOR};
             border-radius: 6px;
         }}
         """
-    
+
     @staticmethod
     def get_combobox_style():
-        """下拉框样式"""
         return f"""
         QComboBox {{
             background-color: {AppStyles.CARD_COLOR};
             border: 2px solid {AppStyles.BORDER_COLOR};
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 6px 10px;
-            font-size: 12px;
-            font-family: "SimSun", "宋体", serif;
+            color: {AppStyles.TEXT_COLOR};
         }}
-        
-        QComboBox:hover {{
+
+        QComboBox:hover, QComboBox:focus {{
             border-color: {AppStyles.PRIMARY_COLOR};
         }}
-        
-        QComboBox::drop-down {{
-            border: none;
-            width: 20px;
-        }}
-        
-        QComboBox::down-arrow {{
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid {AppStyles.SECONDARY_TEXT};
-        }}
         """
-    
+
     @staticmethod
     def get_checkbox_style():
-        """复选框样式"""
         return f"""
         QCheckBox {{
-            font-size: 12px;
-            font-family: "SimSun", "宋体", serif;
             color: {AppStyles.TEXT_COLOR};
             spacing: 8px;
         }}
-        
+
         QCheckBox::indicator {{
             width: 16px;
             height: 16px;
@@ -420,30 +362,24 @@ class AppStyles:
             border-radius: 3px;
             background-color: {AppStyles.CARD_COLOR};
         }}
-        
+
         QCheckBox::indicator:checked {{
             background-color: {AppStyles.PRIMARY_COLOR};
             border-color: {AppStyles.PRIMARY_COLOR};
         }}
-        
-        QCheckBox::indicator:hover {{
-            border-color: {AppStyles.PRIMARY_COLOR};
-        }}
         """
-    
+
     @staticmethod
     def get_spinbox_style():
-        """数字输入框样式"""
         return f"""
         QSpinBox {{
             background-color: {AppStyles.CARD_COLOR};
             border: 2px solid {AppStyles.BORDER_COLOR};
-            border-radius: 6px;
-            padding: 6px;
-            font-size: 12px;
-            font-family: "SimSun", "宋体", serif;
+            border-radius: 8px;
+            padding: 6px 8px;
+            color: {AppStyles.TEXT_COLOR};
         }}
-        
+
         QSpinBox:focus {{
             border-color: {AppStyles.PRIMARY_COLOR};
         }}

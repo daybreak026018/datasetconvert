@@ -1,412 +1,300 @@
 """
-主题管理器
+Theme management for the desktop UI.
 """
-from PyQt5.QtCore import QSettings, pyqtSignal, QObject
-from PyQt5.QtWidgets import QApplication
-from typing import Dict, Any
-import json
-from pathlib import Path
+
+from typing import Any, Dict
+
+from PyQt5.QtCore import QObject, QSettings, pyqtSignal
 
 
 class ThemeManager(QObject):
-    """主题管理器"""
-    
-    theme_changed = pyqtSignal(str)  # 主题改变信号
+    """Centralized theme manager."""
+
+    theme_changed = pyqtSignal(str)
     _instance = None
     _initialized = False
-    
+
     def __new__(cls):
-        """单例模式"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
-        # 避免重复初始化
         if ThemeManager._initialized:
             return
-        
+
         super().__init__()
         self.settings = QSettings("DataForge", "Theme")
-        self.current_theme = self.settings.value("current_theme", "light")
         self.themes = self._load_themes()
+        stored_theme = self.settings.value("current_theme", "light")
+        self.current_theme = self._normalize_theme_name(stored_theme)
         ThemeManager._initialized = True
-    
+
     def _load_themes(self) -> Dict[str, Dict[str, Any]]:
-        """加载主题配置"""
+        base_fonts = {
+            "family": "Microsoft YaHei, Segoe UI, sans-serif",
+            "size_small": 10,
+            "size_normal": 12,
+            "size_large": 14,
+            "size_title": 16,
+        }
+        base_spacing = {
+            "small": 4,
+            "normal": 8,
+            "large": 16,
+            "xlarge": 24,
+        }
+
         return {
             "light": {
-                "name": "浅色主题",
+                "name": "浅色白色主题",
                 "colors": {
-                    "primary": "#2196F3",
-                    "success": "#4CAF50",
-                    "warning": "#FF9800",
-                    "danger": "#F44336",
-                    "background": "#F5F5F5",
+                    "primary": "#2563EB",
+                    "success": "#16A34A",
+                    "warning": "#F59E0B",
+                    "danger": "#EF4444",
+                    "background": "#F7F9FC",
                     "card": "#FFFFFF",
-                    "text": "#212121",
-                    "secondary_text": "#757575",
-                    "border": "#E0E0E0",
-                    "hover": "#E3F2FD",
-                    "selected": "#BBDEFB"
+                    "text": "#111827",
+                    "secondary_text": "#6B7280",
+                    "border": "#D6DEEB",
+                    "hover": "#EEF4FF",
+                    "selected": "#DBEAFE",
+                    "sidebar_bg": "#FFFFFF",
+                    "sidebar_text": "#1F2937",
+                    "sidebar_hover": "#F3F7FF",
+                    "nav_selected": "#E8F0FF",
+                    "nav_selected_border": "#2563EB",
+                    "header_bg": "#FFFFFF",
+                    "header_text": "#111827",
                 },
-                "fonts": {
-                    "family": "SimSun, 宋体, serif",
-                    "size_small": 10,
-                    "size_normal": 12,
-                    "size_large": 14,
-                    "size_title": 16
-                },
-                "spacing": {
-                    "small": 4,
-                    "normal": 8,
-                    "large": 16,
-                    "xlarge": 24
-                },
-                "border_radius": 8,
-                "shadow": "0 2px 4px rgba(0,0,0,0.1)"
-            },
-            
-            "dark": {
-                "name": "深色主题",
-                "colors": {
-                    "primary": "#64B5F6",
-                    "success": "#81C784",
-                    "warning": "#FFB74D",
-                    "danger": "#E57373",
-                    "background": "#121212",
-                    "card": "#1E1E1E",
-                    "text": "#FFFFFF",
-                    "secondary_text": "#B0B0B0",
-                    "border": "#333333",
-                    "hover": "#2C2C2C",
-                    "selected": "#404040"
-                },
-                "fonts": {
-                    "family": "SimSun, 宋体, serif",
-                    "size_small": 10,
-                    "size_normal": 12,
-                    "size_large": 14,
-                    "size_title": 16
-                },
-                "spacing": {
-                    "small": 4,
-                    "normal": 8,
-                    "large": 16,
-                    "xlarge": 24
-                },
-                "border_radius": 8,
-                "shadow": "0 2px 8px rgba(0,0,0,0.3)"
-            },
-            
-            "blue": {
-                "name": "蓝色主题",
-                "colors": {
-                    "primary": "#1976D2",
-                    "success": "#388E3C",
-                    "warning": "#F57C00",
-                    "danger": "#D32F2F",
-                    "background": "#E3F2FD",
-                    "card": "#FFFFFF",
-                    "text": "#0D47A1",
-                    "secondary_text": "#1565C0",
-                    "border": "#90CAF9",
-                    "hover": "#BBDEFB",
-                    "selected": "#2196F3"
-                },
-                "fonts": {
-                    "family": "SimSun, 宋体, serif",
-                    "size_small": 10,
-                    "size_normal": 12,
-                    "size_large": 14,
-                    "size_title": 16
-                },
-                "spacing": {
-                    "small": 4,
-                    "normal": 8,
-                    "large": 16,
-                    "xlarge": 24
-                },
+                "fonts": dict(base_fonts),
+                "spacing": dict(base_spacing),
                 "border_radius": 10,
-                "shadow": "0 2px 6px rgba(25,118,210,0.2)"
+                "shadow": "0 2px 6px rgba(37,99,235,0.08)",
             },
-            
-            "green": {
-                "name": "绿色主题",
+            "dark": {
+                "name": "深色蓝调主题",
                 "colors": {
-                    "primary": "#388E3C",
-                    "success": "#4CAF50",
-                    "warning": "#FF9800",
-                    "danger": "#F44336",
-                    "background": "#E8F5E8",
+                    "primary": "#4DA3FF",
+                    "success": "#34D399",
+                    "warning": "#FBBF24",
+                    "danger": "#F87171",
+                    "background": "#0B1220",
+                    "card": "#111C2E",
+                    "text": "#E5EEF9",
+                    "secondary_text": "#9FB3C8",
+                    "border": "#22324A",
+                    "hover": "#16243A",
+                    "selected": "#1D4ED8",
+                    "sidebar_bg": "#0F172A",
+                    "sidebar_text": "#DCE8F8",
+                    "sidebar_hover": "#16243A",
+                    "nav_selected": "#17345C",
+                    "nav_selected_border": "#4DA3FF",
+                    "header_bg": "#10213B",
+                    "header_text": "#EFF6FF",
+                },
+                "fonts": dict(base_fonts),
+                "spacing": dict(base_spacing),
+                "border_radius": 10,
+                "shadow": "0 2px 10px rgba(5,10,20,0.35)",
+            },
+            "green": {
+                "name": "护眼绿色主题",
+                "colors": {
+                    "primary": "#2F855A",
+                    "success": "#38A169",
+                    "warning": "#D69E2E",
+                    "danger": "#E53E3E",
+                    "background": "#EEF7EF",
                     "card": "#FFFFFF",
-                    "text": "#1B5E20",
-                    "secondary_text": "#2E7D32",
-                    "border": "#A5D6A7",
-                    "hover": "#C8E6C9",
-                    "selected": "#4CAF50"
+                    "text": "#1F3A2D",
+                    "secondary_text": "#5F7A69",
+                    "border": "#C8DEC8",
+                    "hover": "#E3F2E5",
+                    "selected": "#CFE8D2",
+                    "sidebar_bg": "#F4FAF4",
+                    "sidebar_text": "#274C3A",
+                    "sidebar_hover": "#E5F2E7",
+                    "nav_selected": "#D8EEDC",
+                    "nav_selected_border": "#2F855A",
+                    "header_bg": "#E6F4EA",
+                    "header_text": "#1F3A2D",
                 },
-                "fonts": {
-                    "family": "SimSun, 宋体, serif",
-                    "size_small": 10,
-                    "size_normal": 12,
-                    "size_large": 14,
-                    "size_title": 16
-                },
-                "spacing": {
-                    "small": 4,
-                    "normal": 8,
-                    "large": 16,
-                    "xlarge": 24
-                },
-                "border_radius": 8,
-                "shadow": "0 2px 6px rgba(56,142,60,0.2)"
-            }
+                "fonts": dict(base_fonts),
+                "spacing": dict(base_spacing),
+                "border_radius": 10,
+                "shadow": "0 2px 8px rgba(47,133,90,0.12)",
+            },
         }
-    
+
+    def _normalize_theme_name(self, theme_name: str) -> str:
+        alias_map = {
+            "blue": "dark",
+        }
+        normalized = alias_map.get(theme_name, theme_name)
+        if normalized not in self.themes:
+            return "light"
+        return normalized
+
     def get_current_theme(self) -> str:
-        """获取当前主题名称"""
         return self.current_theme
-    
+
     def get_theme_config(self, theme_name: str = None) -> Dict[str, Any]:
-        """获取主题配置"""
-        if theme_name is None:
-            theme_name = self.current_theme
+        theme_name = self.current_theme if theme_name is None else theme_name
+        theme_name = self._normalize_theme_name(theme_name)
         return self.themes.get(theme_name, self.themes["light"])
-    
+
     def set_theme(self, theme_name: str):
-        """设置主题"""
+        theme_name = self._normalize_theme_name(theme_name)
         if theme_name in self.themes:
             self.current_theme = theme_name
             self.settings.setValue("current_theme", theme_name)
             self.theme_changed.emit(theme_name)
-    
+
     def get_available_themes(self) -> Dict[str, str]:
-        """获取可用主题列表"""
         return {name: config["name"] for name, config in self.themes.items()}
-    
+
     def generate_stylesheet(self, theme_name: str = None) -> str:
-        """生成完整的样式表"""
         config = self.get_theme_config(theme_name)
         colors = config["colors"]
         fonts = config["fonts"]
         spacing = config["spacing"]
-        
+        radius = config["border_radius"]
+
         return f"""
-        /* 全局样式 */
         QWidget {{
             background-color: {colors['background']};
             color: {colors['text']};
             font-family: {fonts['family']};
             font-size: {fonts['size_normal']}px;
         }}
-        
-        /* 主窗口 */
+
         QMainWindow {{
             background-color: {colors['background']};
         }}
-        
-        /* 按钮样式 */
+
+        QGroupBox {{
+            background-color: {colors['card']};
+            border: 1px solid {colors['border']};
+            border-radius: {radius + 4}px;
+            margin-top: {spacing['large']}px;
+            padding-top: {spacing['large']}px;
+            font-weight: bold;
+            font-size: {fonts['size_large']}px;
+        }}
+
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            left: {spacing['large']}px;
+            padding: 0 {spacing['normal']}px;
+            background-color: {colors['card']};
+            color: {colors['primary']};
+        }}
+
         QPushButton {{
             background-color: {colors['card']};
             border: 2px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
+            border-radius: {radius}px;
             padding: {spacing['normal']}px {spacing['large']}px;
-            font-size: {fonts['size_normal']}px;
-            font-weight: 500;
             color: {colors['text']};
             min-height: 20px;
         }}
-        
+
         QPushButton:hover {{
             background-color: {colors['hover']};
             border-color: {colors['primary']};
         }}
-        
+
         QPushButton:pressed {{
             background-color: {colors['primary']};
             color: white;
         }}
-        
+
         QPushButton:disabled {{
             background-color: {colors['border']};
             color: {colors['secondary_text']};
             border-color: {colors['border']};
         }}
-        
-        /* 主要按钮 */
+
         QPushButton[buttonType="primary"] {{
             background-color: {colors['primary']};
             border: none;
             color: white;
             font-weight: bold;
         }}
-        
+
         QPushButton[buttonType="primary"]:hover {{
             background-color: {colors['selected']};
         }}
-        
-        /* 成功按钮 */
+
         QPushButton[buttonType="success"] {{
             background-color: {colors['success']};
             border: none;
             color: white;
             font-weight: bold;
         }}
-        
-        /* 警告按钮 */
+
         QPushButton[buttonType="warning"] {{
             background-color: {colors['warning']};
             border: none;
             color: white;
         }}
-        
-        /* 危险按钮 */
+
         QPushButton[buttonType="danger"] {{
             background-color: {colors['danger']};
             border: none;
             color: white;
         }}
-        
-        /* 标签样式 */
+
         QLabel {{
+            background-color: transparent;
             color: {colors['text']};
-            font-size: {fonts['size_normal']}px;
         }}
-        
+
         QLabel[labelType="title"] {{
             color: {colors['primary']};
             font-size: {fonts['size_title']}px;
             font-weight: bold;
-            padding: {spacing['small']}px;
         }}
-        
+
         QLabel[labelType="subtitle"] {{
             color: {colors['secondary_text']};
             font-size: {fonts['size_small']}px;
-            font-style: italic;
         }}
-        
+
         QLabel[labelType="status"] {{
             background-color: {colors['card']};
             border: 1px solid {colors['border']};
-            border-radius: {config['border_radius'] // 2}px;
+            border-radius: {radius // 2}px;
             padding: {spacing['small']}px {spacing['normal']}px;
         }}
-        
-        /* 组框样式 */
-        QGroupBox {{
-            background-color: {colors['card']};
-            border: 2px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
-            margin-top: {spacing['normal']}px;
-            padding-top: {spacing['normal']}px;
-            font-weight: bold;
-            font-size: {fonts['size_large']}px;
-        }}
-        
-        QGroupBox::title {{
-            subcontrol-origin: margin;
-            left: {spacing['large']}px;
-            padding: 0 {spacing['normal']}px 0 {spacing['normal']}px;
-            color: {colors['primary']};
-        }}
-        
-        /* 列表控件 */
-        QListWidget {{
+
+        QTextEdit, QLineEdit, QComboBox, QSpinBox, QListWidget, QScrollArea {{
             background-color: {colors['card']};
             border: 1px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
-            padding: {spacing['normal']}px;
-            font-size: {fonts['size_normal']}px;
-            outline: none;
+            border-radius: {radius}px;
         }}
-        
-        QListWidget::item {{
-            height: 45px;
-            padding: {spacing['normal']}px {spacing['large']}px;
-            border-radius: {config['border_radius'] // 2}px;
-            margin: 2px 0px;
-            outline: none;
+
+        QTextEdit:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+            border: 2px solid {colors['primary']};
         }}
-        
+
         QListWidget::item:selected {{
             background-color: {colors['primary']};
             color: white;
-            outline: none;
         }}
-        
+
         QListWidget::item:hover {{
             background-color: {colors['hover']};
         }}
-        
-        QListWidget::item:focus {{
-            outline: none;
-        }}
-        
-        QListWidget:focus {{
-            outline: none;
-        }}
-        
-        /* 文本编辑框 */
-        QTextEdit {{
-            background-color: {colors['card']};
-            border: 2px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
-            padding: {spacing['normal']}px;
-            font-family: "Consolas", "Monaco", monospace;
-            font-size: {fonts['size_small']}px;
-            line-height: 1.4;
-        }}
-        
-        QTextEdit:focus {{
-            border-color: {colors['primary']};
-        }}
-        
-        QLineEdit {{
-            background-color: {colors['card']};
-            border: 2px solid {colors['border']};
-            border-radius: {config['border_radius'] // 2}px;
-            padding: {spacing['small']}px {spacing['normal']}px;
-            font-size: {fonts['size_normal']}px;
-        }}
-        
-        QLineEdit:focus {{
-            border-color: {colors['primary']};
-        }}
-        
-        /* 下拉框 */
-        QComboBox {{
-            background-color: {colors['card']};
-            border: 2px solid {colors['border']};
-            border-radius: {config['border_radius'] // 2}px;
-            padding: {spacing['small']}px {spacing['normal']}px;
-            font-size: {fonts['size_normal']}px;
-        }}
-        
-        QComboBox:hover {{
-            border-color: {colors['primary']};
-        }}
-        
-        QComboBox::drop-down {{
-            border: none;
-            width: 20px;
-        }}
-        
-        QComboBox::down-arrow {{
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid {colors['secondary_text']};
-        }}
-        
-        /* 复选框 */
+
         QCheckBox {{
-            font-size: {fonts['size_normal']}px;
             color: {colors['text']};
             spacing: {spacing['normal']}px;
         }}
-        
+
         QCheckBox::indicator {{
             width: 16px;
             height: 16px;
@@ -414,194 +302,99 @@ class ThemeManager(QObject):
             border-radius: 3px;
             background-color: {colors['card']};
         }}
-        
+
         QCheckBox::indicator:checked {{
             background-color: {colors['primary']};
             border-color: {colors['primary']};
         }}
-        
-        QCheckBox::indicator:hover {{
-            border-color: {colors['primary']};
-        }}
-        
-        /* 数字输入框 */
-        QSpinBox {{
-            background-color: {colors['card']};
-            border: 2px solid {colors['border']};
-            border-radius: {config['border_radius'] // 2}px;
-            padding: {spacing['small']}px;
-            font-size: {fonts['size_normal']}px;
-        }}
-        
-        QSpinBox:focus {{
-            border-color: {colors['primary']};
-        }}
-        
-        /* 进度条 */
+
         QProgressBar {{
             background-color: {colors['background']};
             border: 2px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
+            border-radius: {radius}px;
             text-align: center;
-            font-size: {fonts['size_small']}px;
-            font-weight: bold;
         }}
-        
+
         QProgressBar::chunk {{
             background-color: {colors['primary']};
-            border-radius: {config['border_radius'] - 2}px;
+            border-radius: {max(radius - 2, 1)}px;
         }}
-        
-        /* 滚动条 */
-        QScrollBar:vertical {{
-            background-color: {colors['background']};
-            width: 12px;
-            border-radius: 6px;
-        }}
-        
-        QScrollBar::handle:vertical {{
-            background-color: {colors['border']};
-            border-radius: 6px;
-            min-height: 20px;
-        }}
-        
-        QScrollBar::handle:vertical:hover {{
-            background-color: {colors['secondary_text']};
-        }}
-        
-        QScrollBar:horizontal {{
-            background-color: {colors['background']};
-            height: 12px;
-            border-radius: 6px;
-        }}
-        
-        QScrollBar::handle:horizontal {{
-            background-color: {colors['border']};
-            border-radius: 6px;
-            min-width: 20px;
-        }}
-        
-        QScrollBar::handle:horizontal:hover {{
-            background-color: {colors['secondary_text']};
-        }}
-        
-        /* 菜单栏 */
-        QMenuBar {{
-            background-color: {colors['card']};
-            border-bottom: 1px solid {colors['border']};
-        }}
-        
-        QMenuBar::item {{
-            background-color: transparent;
-            padding: {spacing['normal']}px {spacing['large']}px;
-        }}
-        
-        QMenuBar::item:selected {{
-            background-color: {colors['hover']};
-        }}
-        
-        /* 工具栏 */
-        QToolBar {{
-            background-color: {colors['card']};
-            border: 1px solid {colors['border']};
-            spacing: {spacing['small']}px;
-        }}
-        
-        /* 状态栏 */
-        QStatusBar {{
-            background-color: {colors['card']};
-            border-top: 1px solid {colors['border']};
-        }}
-        
-        /* 选项卡控件 */
-        QTabWidget {{
-            background-color: {colors['background']};
-            border: none;
-        }}
-        
+
         QTabWidget::pane {{
             background-color: {colors['card']};
             border: 2px solid {colors['border']};
-            border-radius: {config['border_radius']}px;
-            margin-top: -1px;
+            border-radius: {radius}px;
         }}
-        
-        QTabWidget::tab-bar {{
-            alignment: left;
-            left: 5px;
-        }}
-        
-        QTabBar {{
-            background-color: transparent;
-            outline: none;
-            qproperty-expanding: true;
-            qproperty-usesScrollButtons: false;
-            qproperty-elideMode: 0;
-            qproperty-drawBase: false;
-            font-size: {fonts['size_small']}px;
-        }}
-        
+
         QTabBar::tab {{
             background-color: {colors['background']};
-            border: 2px solid {colors['border']};
+            border: 1px solid {colors['border']};
             border-bottom: none;
-            border-radius: {config['border_radius']}px {config['border_radius']}px 0px 0px;
+            border-top-left-radius: {radius}px;
+            border-top-right-radius: {radius}px;
             padding: {spacing['small']}px {spacing['normal']}px;
-            margin-right: 2px;
-            font-size: {fonts['size_small']}px;
             color: {colors['text']};
-            outline: none;
-            text-align: center;
-            white-space: nowrap;
         }}
-        
+
         QTabBar::tab:selected {{
             background-color: {colors['card']};
             border-color: {colors['primary']};
             color: {colors['primary']};
             font-weight: bold;
         }}
-        
+
         QTabBar::tab:hover {{
             background-color: {colors['hover']};
-            border-color: {colors['primary']};
         }}
-        
-        QTabBar::tab:focus {{
-            outline: none;
+
+        QScrollBar:vertical {{
+            background-color: transparent;
+            width: 10px;
+            margin: 4px 0px 4px 0px;
+        }}
+
+        QScrollBar::handle:vertical {{
+            background-color: #cfe1d0;
+            border-radius: 5px;
+            min-height: 36px;
+        }}
+
+        QScrollBar::handle:vertical:hover {{
+            background-color: #b7d1bb;
+        }}
+
+        QScrollBar:horizontal {{
+            background-color: transparent;
+            height: 10px;
+            margin: 0px 4px 0px 4px;
+        }}
+
+        QScrollBar::handle:horizontal {{
+            background-color: #cfe1d0;
+            border-radius: 5px;
+            min-width: 36px;
+        }}
+
+        QScrollBar::handle:horizontal:hover {{
+            background-color: #b7d1bb;
+        }}
+
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical,
+        QScrollBar::add-page:vertical,
+        QScrollBar::sub-page:vertical,
+        QScrollBar::add-line:horizontal,
+        QScrollBar::sub-line:horizontal,
+        QScrollBar::add-page:horizontal,
+        QScrollBar::sub-page:horizontal {{
+            background: transparent;
             border: none;
-        }}
-        
-        /* 移除所有焦点虚框 */
-        QTabWidget:focus {{
-            outline: none;
-        }}
-        
-        QTabBar:focus {{
-            outline: none;
-        }}
-        
-        QTabBar::tab:focus {{
-            outline: none;
-        }}
-        
-        /* 分隔符 */
-        QFrame[frameShape="4"] {{
-            background-color: {colors['border']};
-            max-width: 1px;
-        }}
-        
-        QFrame[frameShape="5"] {{
-            background-color: {colors['border']};
-            max-height: 1px;
         }}
         """
 
 
-# 全局主题管理器实例 - 使用函数获取以确保线程安全
 def get_theme_manager():
-    """获取主题管理器实例"""
     return ThemeManager()
 
-# 为了向后兼容，保留全局变量
+
 theme_manager = get_theme_manager()

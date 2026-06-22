@@ -134,7 +134,7 @@ class HomeWindow(QMainWindow):
         
         # 右上角用户信息占位
         user_info = QLabel("Admin")
-        user_info.setStyleSheet("color: white; font-weight: bold;")
+        user_info.setObjectName("headerUserInfo")
         header_layout.addWidget(user_info)
         
         content_layout.addWidget(header)
@@ -211,7 +211,12 @@ class HomeWindow(QMainWindow):
             
         # 侧边栏和头部颜色 (如果没有定义则使用默认值)
         AppStyles.SIDEBAR_BG = colors.get("sidebar_bg", "#2c3e50")
-        AppStyles.HEADER_BG = colors.get("header_bg", "#27ae60")
+        AppStyles.SIDEBAR_TEXT = colors.get("sidebar_text", AppStyles.TEXT_COLOR)
+        AppStyles.SIDEBAR_HOVER = colors.get("sidebar_hover", colors.get("hover", "#34495e"))
+        AppStyles.NAV_SELECTED_BG = colors.get("nav_selected", colors.get("selected", colors.get("primary", "#27ae60")))
+        AppStyles.NAV_SELECTED_BORDER = colors.get("nav_selected_border", colors.get("primary", "#2ecc71"))
+        AppStyles.HEADER_BG = colors.get("header_bg", colors.get("card", "#27ae60"))
+        AppStyles.HEADER_TEXT = colors.get("header_text", colors.get("text", "#ffffff"))
         
         # 重新应用样式表
         self.setStyleSheet(AppStyles.get_main_window_style())
