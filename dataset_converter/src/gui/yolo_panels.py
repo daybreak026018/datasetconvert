@@ -904,6 +904,12 @@ class YOLOProcessPanel(YOLOBasePanel):
 
 
 class YOLOTrainingPanel(YOLOProcessPanel):
+    MODEL_OPTIONS = {
+        "detect": ["yolo11n", "yolo11s", "yolo11m", "yolo11l", "yolo11x", "yolov8n", "yolov8s", "yolov8m", "yolov8l", "yolov8x", "yolov5n", "yolov5s", "yolov5m", "yolov5l", "yolov5x", "yolo26n", "yolo26s", "yolo26m", "yolo26l", "yolo26x"],
+        "segment": ["yolo11n-seg", "yolo11s-seg", "yolo11m-seg", "yolo11l-seg", "yolo11x-seg", "yolov8n-seg", "yolov8s-seg", "yolov8m-seg", "yolov8l-seg", "yolov8x-seg"],
+        "classify": ["yolo11n-cls", "yolo11s-cls", "yolo11m-cls", "yolo11l-cls", "yolo11x-cls", "yolov8n-cls", "yolov8s-cls", "yolov8m-cls", "yolov8l-cls", "yolov8x-cls"],
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.runs_manager = RunsManager(Path.cwd() / "runs")
@@ -913,7 +919,7 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(12)
-        banner = QLabel("本机一键训练：选择任务、YOLO版本和数据后启动。勾选预训练时使用 .pt，不勾选时从 .yaml 开始训练。")
+        banner = QLabel("本机一键训练：选择任务、YOLO版本和数据后启动。支持 YOLO26 / YOLO11 / YOLOv8 多尺寸模型。勾选预训练时使用 .pt，不勾选时从 .yaml 开始训练。")
         banner.setObjectName("banner")
         banner.setWordWrap(True)
         root.addWidget(banner)
@@ -926,20 +932,10 @@ class YOLOTrainingPanel(YOLOProcessPanel):
 
         self.task_combo = QComboBox()
         self.task_combo.addItems(["detect", "segment", "classify"])
+        self.task_combo.currentTextChanged.connect(self._refresh_model_options)
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
-        self.model_combo.addItems(
-            [
-                "yolo26n",
-                "yolo26s",
-                "yolo26m",
-                "yolo26l",
-                "yolo26x",
-                "yolo11n",
-                "yolo11s",
-                "yolov8n",
-            ]
-        )
+        self._refresh_model_options(self.task_combo.currentText())
         self.data_edit = QLineEdit()
         self.env_edit = QLineEdit()
         self.env_edit.setReadOnly(True)
@@ -1006,6 +1002,18 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         root.addWidget(preview_group)
 
         self.refresh_curve_preview()
+
+    def _refresh_model_options(self, task: str):
+        current = self.model_combo.currentText().strip()
+        options = self.MODEL_OPTIONS.get(task, self.MODEL_OPTIONS["detect"])
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        self.model_combo.addItems(options)
+        if current:
+            self.model_combo.setEditText(current)
+        elif options:
+            self.model_combo.setCurrentText(options[0])
+        self.model_combo.blockSignals(False)
 
     def _spin(self, min_value, max_value, value):
         spin = QSpinBox()
