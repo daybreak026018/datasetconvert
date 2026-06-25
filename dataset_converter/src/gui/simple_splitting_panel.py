@@ -360,15 +360,15 @@ class SimpleSplittingPanel(QWidget):
 
             QLabel#splitBanner,
             QLabel#splitStatus {
-                background-color: #edf5ff;
-                border: 1px solid #c8dcf8;
+                background-color: #eaf2ff;
+                border: 1px solid #c8daf1;
                 border-radius: 14px;
                 padding: 12px 16px;
-                color: #20456d;
+                color: #163153;
             }
 
             QLabel#splitTotal[state="ok"] {
-                color: #2f7fe8;
+                color: #2f6fdb;
                 font-weight: bold;
             }
 
@@ -383,8 +383,8 @@ class SimpleSplittingPanel(QWidget):
             }
 
             QFrame#summaryCard {
-                background-color: #f7fbff;
-                border: 1px solid #dbe7f6;
+                background-color: #f8fbff;
+                border: 1px solid #d7e4f3;
                 border-radius: 18px;
             }
 
@@ -394,7 +394,7 @@ class SimpleSplittingPanel(QWidget):
             }
 
             QTableWidget {
-                border: 1px solid #dbe7f6;
+                border: 1px solid #d7e4f3;
                 border-radius: 14px;
                 background-color: #fbfdff;
                 gridline-color: #e7eef8;
@@ -402,7 +402,7 @@ class SimpleSplittingPanel(QWidget):
 
             QHeaderView::section {
                 background-color: #eef5ff;
-                color: #20456d;
+                color: #163153;
                 border: none;
                 padding: 10px;
             }

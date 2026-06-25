@@ -24,6 +24,8 @@ VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".wmv"}
 
 @dataclass
 class YOLOEnvironmentReport:
+    python_executable: str
+    environment_name: str
     python_version: str
     platform: str
     torch_installed: bool
@@ -72,6 +74,7 @@ class YOLOTrainConfig:
     workers: int
     patience: int
     resume: bool
+    python_executable: str = ""
 
 
 @dataclass
@@ -86,13 +89,18 @@ class YOLOPredictConfig:
     save_txt: bool
     save_conf: bool
     output_dir: str
+    python_executable: str = ""
 
 
 class EnvironmentChecker:
     """Read-only dependency checker. It never installs packages."""
 
     @staticmethod
-    def check() -> YOLOEnvironmentReport:
+    def check(python_executable: str = None, environment_name: str = "当前环境") -> YOLOEnvironmentReport:
+        python_executable = python_executable or sys.executable
+        if Path(python_executable).resolve() != Path(sys.executable).resolve():
+            return EnvironmentChecker._check_external_python(python_executable, environment_name)
+
         torch_installed = importlib.util.find_spec("torch") is not None
         torch_version = "未安装"
         cuda_available = False
@@ -139,6 +147,8 @@ class EnvironmentChecker:
             status = "可训练-CPU"
 
         return YOLOEnvironmentReport(
+            python_executable=sys.executable,
+            environment_name=environment_name,
             python_version=sys.version.split()[0],
             platform=f"{platform.system()} {platform.release()}",
             torch_installed=torch_installed,
@@ -154,6 +164,177 @@ class EnvironmentChecker:
             cpu_install_command="python -m pip install -U ultralytics torch torchvision torchaudio",
             gpu_install_command="请按 CUDA 版本到 PyTorch 官网选择 torch 安装命令，然后执行: python -m pip install -U ultralytics",
         )
+
+    @staticmethod
+    def _check_external_python(python_executable: str, environment_name: str) -> YOLOEnvironmentReport:
+        script = (
+            "import importlib.util,json,platform,sys;"
+            "d={'python_version':sys.version.split()[0],'platform':platform.system()+' '+platform.release()};"
+            "d['torch_installed']=importlib.util.find_spec('torch') is not None;"
+            "d['ultralytics_installed']=importlib.util.find_spec('ultralytics') is not None;"
+            "d['opencv_installed']=importlib.util.find_spec('cv2') is not None;"
+            "d.update({'torch_version':'未安装','cuda_available':False,'cuda_version':'不可用','gpu_name':'未检测到 GPU','ultralytics_version':'未安装','opencv_version':'未安装'});"
+            "\nif d['torch_installed']:\n"
+            " import torch\n"
+            " d['torch_version']=getattr(torch,'__version__','未知')\n"
+            " d['cuda_available']=bool(torch.cuda.is_available())\n"
+            " d['cuda_version']=getattr(torch.version,'cuda',None) or 'CPU'\n"
+            " d['gpu_name']=torch.cuda.get_device_name(0) if d['cuda_available'] else d['gpu_name']\n"
+            "if d['ultralytics_installed']:\n"
+            " import ultralytics\n"
+            " d['ultralytics_version']=getattr(ultralytics,'__version__','未知')\n"
+            "if d['opencv_installed']:\n"
+            " import cv2\n"
+            " d['opencv_version']=getattr(cv2,'__version__','未知')\n"
+            "print(json.dumps(d,ensure_ascii=False))"
+        )
+        try:
+            proc = subprocess.run(
+                [python_executable, "-c", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=20,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError((proc.stderr or proc.stdout or "检测失败").strip())
+            data = json.loads(proc.stdout.strip().splitlines()[-1])
+            if not data["ultralytics_installed"] or not data["torch_installed"]:
+                status = "缺依赖"
+            elif data["cuda_available"]:
+                status = "可训练-GPU"
+            else:
+                status = "可训练-CPU"
+            return YOLOEnvironmentReport(
+                python_executable=python_executable,
+                environment_name=environment_name,
+                python_version=data["python_version"],
+                platform=data["platform"],
+                torch_installed=data["torch_installed"],
+                torch_version=data["torch_version"],
+                cuda_available=data["cuda_available"],
+                cuda_version=data["cuda_version"],
+                gpu_name=data["gpu_name"],
+                ultralytics_installed=data["ultralytics_installed"],
+                ultralytics_version=data["ultralytics_version"],
+                opencv_installed=data["opencv_installed"],
+                opencv_version=data["opencv_version"],
+                status=status,
+                cpu_install_command=f"\"{python_executable}\" -m pip install -U ultralytics torch torchvision torchaudio",
+                gpu_install_command=f"请按 CUDA 版本安装匹配 torch，然后执行: \"{python_executable}\" -m pip install -U ultralytics",
+            )
+        except Exception as exc:
+            return YOLOEnvironmentReport(
+                python_executable=python_executable,
+                environment_name=environment_name,
+                python_version="检测失败",
+                platform=platform.system(),
+                torch_installed=False,
+                torch_version=f"检测失败: {exc}",
+                cuda_available=False,
+                cuda_version="不可用",
+                gpu_name="未检测到 GPU",
+                ultralytics_installed=False,
+                ultralytics_version="检测失败",
+                opencv_installed=False,
+                opencv_version="检测失败",
+                status="环境异常",
+                cpu_install_command=f"\"{python_executable}\" -m pip install -U ultralytics torch torchvision torchaudio",
+                gpu_install_command=f"请先确认该 Python 可执行文件有效: {python_executable}",
+            )
+
+
+class CondaEnvironmentManager:
+    """Discover local Conda environments without activating shells."""
+
+    @staticmethod
+    def list_environments() -> List[Dict[str, str]]:
+        envs = [{"name": "当前Python", "path": str(Path(sys.executable).parent), "python": sys.executable}]
+        conda_exe = CondaEnvironmentManager._find_conda_exe()
+        if conda_exe:
+            envs.extend(CondaEnvironmentManager._list_from_conda(conda_exe))
+        envs.extend(CondaEnvironmentManager._list_from_common_dirs())
+        return CondaEnvironmentManager._dedupe_envs(envs)
+
+    @staticmethod
+    def _find_conda_exe() -> Optional[str]:
+        candidates = ["conda"]
+        import os
+
+        if os.environ.get("CONDA_EXE"):
+            candidates.insert(0, os.environ["CONDA_EXE"])
+        python_dir = Path(sys.executable).parent
+        for conda_exe in (
+            python_dir / "Scripts" / "conda.exe",
+            python_dir.parent / "Scripts" / "conda.exe",
+            python_dir.parent.parent / "Scripts" / "conda.exe" if len(python_dir.parents) > 1 else None,
+        ):
+            if conda_exe and conda_exe.exists():
+                candidates.insert(0, str(conda_exe))
+        for candidate in candidates:
+            try:
+                proc = subprocess.run([candidate, "--version"], capture_output=True, text=True, timeout=5)
+                if proc.returncode == 0:
+                    return candidate
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _list_from_conda(conda_exe: str) -> List[Dict[str, str]]:
+        try:
+            proc = subprocess.run(
+                [conda_exe, "env", "list", "--json"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=10,
+            )
+            if proc.returncode != 0:
+                return []
+            data = json.loads(proc.stdout)
+            return [CondaEnvironmentManager._env_from_path(Path(path)) for path in data.get("envs", [])]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _list_from_common_dirs() -> List[Dict[str, str]]:
+        roots = [
+            Path.home() / "miniconda3",
+            Path.home() / "anaconda3",
+            Path("D:/Users/lst/miniconda3"),
+            Path("D:/Users/lst/anaconda3"),
+            Path("C:/Users/lst/miniconda3"),
+            Path("C:/Users/lst/anaconda3"),
+        ]
+        envs = []
+        for root in roots:
+            if root.exists():
+                envs.append(CondaEnvironmentManager._env_from_path(root))
+                env_dir = root / "envs"
+                if env_dir.exists():
+                    envs.extend(CondaEnvironmentManager._env_from_path(path) for path in env_dir.iterdir() if path.is_dir())
+        return envs
+
+    @staticmethod
+    def _env_from_path(path: Path) -> Dict[str, str]:
+        python = path / "python.exe" if platform.system() == "Windows" else path / "bin" / "python"
+        name = "base" if path.name.lower() in {"miniconda3", "anaconda3"} else path.name
+        return {"name": name, "path": str(path), "python": str(python)}
+
+    @staticmethod
+    def _dedupe_envs(envs: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        deduped = []
+        seen = set()
+        for env in envs:
+            python = env.get("python", "")
+            if not python or python in seen or not Path(python).exists():
+                continue
+            seen.add(python)
+            deduped.append(env)
+        return deduped
 
 
 class YOLODatasetInspector:
@@ -306,7 +487,7 @@ class YOLOCommandBuilder:
     def build_train(config: YOLOTrainConfig) -> List[str]:
         data_arg = config.data_yaml if config.task == "classify" else config.data_yaml
         args = [
-            sys.executable,
+            config.python_executable or sys.executable,
             "-m",
             "dataset_converter.src.core.yolo_cli_runner",
             "train",
@@ -340,7 +521,7 @@ class YOLOCommandBuilder:
     @staticmethod
     def build_predict(config: YOLOPredictConfig) -> List[str]:
         args = [
-            sys.executable,
+            config.python_executable or sys.executable,
             "-m",
             "dataset_converter.src.core.yolo_cli_runner",
             "predict",

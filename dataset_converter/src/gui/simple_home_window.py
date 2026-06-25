@@ -109,7 +109,12 @@ class SimpleHomeWindow(QMainWindow):
         self.setMinimumSize(720, 480)
         self.resize(920, 560)
 
-        icon_path = Path(__file__).parent.parent.parent / "resources" / "icon.png"
+        icon_root = Path(__file__).resolve().parents[3] / "assets"
+        icon_path = icon_root / "logo.ico"
+        if not icon_path.exists():
+            icon_path = icon_root / "logo.png"
+        if not icon_path.exists():
+            icon_path = Path(__file__).parent.parent.parent / "resources" / "icon.png"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -242,19 +247,19 @@ class SimpleHomeWindow(QMainWindow):
         blue_base = theme_manager.generate_stylesheet("light")
         shell_style = """
         QWidget#shellRoot {
-            background-color: #f4f8fc;
+            background-color: #f3f8ff;
         }
 
         QFrame#sidebar {
-            background-color: #ffffff;
-            border-right: 1px solid #dbe6f2;
+            background-color: #fbfdff;
+            border-right: 1px solid #d5e2f2;
         }
 
         QFrame#headerCard,
         QFrame#stackCard {
             background-color: #ffffff;
-            border: 1px solid #dbe6f2;
-            border-radius: 8px;
+            border: 1px solid #d5e2f2;
+            border-radius: 12px;
         }
 
         QFrame#stackCard {
@@ -262,13 +267,13 @@ class SimpleHomeWindow(QMainWindow):
         }
 
         QLabel#pageDesc {
-            color: #6c7f97;
+            color: #60758f;
             font-size: 11px;
             background-color: transparent;
         }
 
         QLabel#pageTitle {
-            color: #1f3b63;
+            color: #163153;
             font-size: 18px;
             font-weight: 700;
             background-color: transparent;
@@ -276,30 +281,30 @@ class SimpleHomeWindow(QMainWindow):
 
         QFrame#navCard {
             background-color: #ffffff;
-            border: 1px solid #e1eaf5;
-            border-radius: 8px;
+            border: 1px solid #dce7f4;
+            border-radius: 12px;
         }
 
         QFrame#navCard:hover {
-            background-color: #f5f9ff;
-            border-color: #bfd4ef;
+            background-color: #f2f7ff;
+            border-color: #b6cae7;
         }
 
         QFrame#navCard[selected="true"] {
-            background-color: #edf5ff;
-            border: 1px solid #9fc2ef;
-            border-left: 3px solid #2f7fe8;
+            background-color: #e6f0ff;
+            border: 1px solid #9fbee8;
+            border-left: 3px solid #2f6fdb;
         }
 
         QFrame#navCard QLabel#navTitle {
-            color: #24466f;
+            color: #163153;
             font-size: 12px;
             font-weight: 700;
             background-color: transparent;
         }
 
         QFrame#navCard QLabel#navSubtitle {
-            color: #7a8ea8;
+            color: #6d829c;
             font-size: 10px;
             background-color: transparent;
         }

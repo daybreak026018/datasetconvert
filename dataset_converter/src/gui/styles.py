@@ -6,23 +6,23 @@ Shared application styles.
 class AppStyles:
     """Application style definitions."""
 
-    PRIMARY_COLOR = "#2563EB"
-    SUCCESS_COLOR = "#16A34A"
+    PRIMARY_COLOR = "#2F6FDB"
+    SUCCESS_COLOR = "#4A88ED"
     WARNING_COLOR = "#F59E0B"
-    DANGER_COLOR = "#EF4444"
-    BACKGROUND_COLOR = "#F7F9FC"
+    DANGER_COLOR = "#E85050"
+    BACKGROUND_COLOR = "#F3F8FF"
     CARD_COLOR = "#FFFFFF"
-    TEXT_COLOR = "#111827"
-    SECONDARY_TEXT = "#6B7280"
-    BORDER_COLOR = "#D6DEEB"
+    TEXT_COLOR = "#10233F"
+    SECONDARY_TEXT = "#60758F"
+    BORDER_COLOR = "#D5E2F2"
 
-    SIDEBAR_BG = "#FFFFFF"
-    SIDEBAR_TEXT = "#1F2937"
-    SIDEBAR_HOVER = "#F3F7FF"
+    SIDEBAR_BG = "#FBFDFF"
+    SIDEBAR_TEXT = "#163153"
+    SIDEBAR_HOVER = "#F1F7FF"
     HEADER_BG = "#FFFFFF"
-    HEADER_TEXT = "#111827"
-    NAV_SELECTED_BG = "#E8F0FF"
-    NAV_SELECTED_BORDER = "#2563EB"
+    HEADER_TEXT = "#10233F"
+    NAV_SELECTED_BG = "#E6F0FF"
+    NAV_SELECTED_BORDER = "#2F6FDB"
 
     @staticmethod
     def get_main_window_style():
@@ -97,9 +97,9 @@ class AppStyles:
         }}
 
         QFrame[class="navSeparator"] {{
-            color: #D1D5DB;
+            color: #D2DEEC;
             border: none;
-            background-color: #E9ECEF;
+            background-color: #E8F0FA;
             width: 1px;
             margin: 0px 5px;
         }}
@@ -195,7 +195,7 @@ class AppStyles:
                 }}
 
                 QPushButton:hover {{
-                    background-color: #EEF4FF;
+                    background-color: #EAF2FF;
                     border-color: {AppStyles.PRIMARY_COLOR};
                 }}
 
@@ -216,11 +216,11 @@ class AppStyles:
                 }}
 
                 QPushButton:hover {{
-                    background-color: #1D4ED8;
+                    background-color: #255FBE;
                 }}
 
                 QPushButton:pressed {{
-                    background-color: #1E40AF;
+                    background-color: #1D4E9E;
                 }}
             """,
             "success": f"""
@@ -235,11 +235,11 @@ class AppStyles:
                 }}
 
                 QPushButton:hover {{
-                    background-color: #15803D;
+                    background-color: #3C79DC;
                 }}
 
                 QPushButton:pressed {{
-                    background-color: #166534;
+                    background-color: #2C67C4;
                 }}
             """,
             "warning": f"""

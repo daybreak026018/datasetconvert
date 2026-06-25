@@ -584,16 +584,16 @@ class ConverterPanel(QWidget):
             }
 
             QLabel#converterStatus {
-                background-color: #edf5ff;
-                border: 1px solid #c8dcf8;
+                background-color: #eaf2ff;
+                border: 1px solid #c8daf1;
                 border-radius: 8px;
                 padding: 8px 10px;
-                color: #20456d;
+                color: #163153;
                 font-weight: bold;
             }
 
             QLabel#converterLogTitle {
-                color: #20456d;
+                color: #163153;
                 font-size: 12px;
                 font-weight: bold;
                 padding-left: 2px;
@@ -606,8 +606,8 @@ class ConverterPanel(QWidget):
             }
 
             QFrame#optionWrap {
-                background-color: #f6faff;
-                border: 1px solid #dbe7f6;
+                background-color: #f7fbff;
+                border: 1px solid #d7e4f3;
                 border-radius: 8px;
             }
             """

@@ -28,3 +28,12 @@ build/
 
 # Qt resources (compiled outputs)
 *.rcc
+# 忽略所有 .pt 模型文件
+*.pt
+
+# 忽略所有 .jpg 图片文件
+*.jpg
+
+# 忽略所有 .csv 数据文件
+*.csv
+runs/

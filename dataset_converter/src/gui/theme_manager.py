@@ -47,37 +47,45 @@ class ThemeManager(QObject):
 
         return {
             "light": {
-                "name": "浅色白色主题",
+                "name": "浅色蓝白主题",
                 "colors": {
-                    "primary": "#2563EB",
-                    "success": "#16A34A",
+                    "primary": "#2F6FDB",
+                    "primary_hover": "#255FBE",
+                    "primary_pressed": "#1D4E9E",
+                    "success": "#4A88ED",
+                    "success_hover": "#3C79DC",
                     "warning": "#F59E0B",
-                    "danger": "#EF4444",
-                    "background": "#F7F9FC",
+                    "danger": "#E85050",
+                    "background": "#F3F8FF",
                     "card": "#FFFFFF",
-                    "text": "#111827",
-                    "secondary_text": "#6B7280",
-                    "border": "#D6DEEB",
-                    "hover": "#EEF4FF",
-                    "selected": "#DBEAFE",
-                    "sidebar_bg": "#FFFFFF",
-                    "sidebar_text": "#1F2937",
-                    "sidebar_hover": "#F3F7FF",
-                    "nav_selected": "#E8F0FF",
-                    "nav_selected_border": "#2563EB",
+                    "text": "#10233F",
+                    "secondary_text": "#60758F",
+                    "border": "#D5E2F2",
+                    "hover": "#EAF2FF",
+                    "selected": "#DCEAFF",
+                    "sidebar_bg": "#FBFDFF",
+                    "sidebar_text": "#163153",
+                    "sidebar_hover": "#F1F7FF",
+                    "nav_selected": "#E6F0FF",
+                    "nav_selected_border": "#2F6FDB",
                     "header_bg": "#FFFFFF",
-                    "header_text": "#111827",
+                    "header_text": "#10233F",
+                    "scrollbar": "#B8CCEA",
+                    "scrollbar_hover": "#95B3DE",
                 },
                 "fonts": dict(base_fonts),
                 "spacing": dict(base_spacing),
                 "border_radius": 10,
-                "shadow": "0 2px 6px rgba(37,99,235,0.08)",
+                "shadow": "0 6px 18px rgba(47,111,219,0.10)",
             },
             "dark": {
                 "name": "深色蓝调主题",
                 "colors": {
                     "primary": "#4DA3FF",
-                    "success": "#34D399",
+                    "primary_hover": "#3D92EF",
+                    "primary_pressed": "#2975C8",
+                    "success": "#67B0FF",
+                    "success_hover": "#5199E5",
                     "warning": "#FBBF24",
                     "danger": "#F87171",
                     "background": "#0B1220",
@@ -94,6 +102,8 @@ class ThemeManager(QObject):
                     "nav_selected_border": "#4DA3FF",
                     "header_bg": "#10213B",
                     "header_text": "#EFF6FF",
+                    "scrollbar": "#335077",
+                    "scrollbar_hover": "#466892",
                 },
                 "fonts": dict(base_fonts),
                 "spacing": dict(base_spacing),
@@ -104,7 +114,10 @@ class ThemeManager(QObject):
                 "name": "护眼绿色主题",
                 "colors": {
                     "primary": "#2F855A",
+                    "primary_hover": "#276F4B",
+                    "primary_pressed": "#215B3E",
                     "success": "#38A169",
+                    "success_hover": "#2F855A",
                     "warning": "#D69E2E",
                     "danger": "#E53E3E",
                     "background": "#EEF7EF",
@@ -121,6 +134,8 @@ class ThemeManager(QObject):
                     "nav_selected_border": "#2F855A",
                     "header_bg": "#E6F4EA",
                     "header_text": "#1F3A2D",
+                    "scrollbar": "#BCD3C2",
+                    "scrollbar_hover": "#A1C1AB",
                 },
                 "fonts": dict(base_fonts),
                 "spacing": dict(base_spacing),
@@ -131,7 +146,10 @@ class ThemeManager(QObject):
 
     def _normalize_theme_name(self, theme_name: str) -> str:
         alias_map = {
-            "blue": "dark",
+            "blue": "light",
+            "white": "light",
+            "dark_blue": "dark",
+            "eye_care": "green",
         }
         normalized = alias_map.get(theme_name, theme_name)
         if normalized not in self.themes:
@@ -226,7 +244,11 @@ class ThemeManager(QObject):
         }}
 
         QPushButton[buttonType="primary"]:hover {{
-            background-color: {colors['selected']};
+            background-color: {colors.get('primary_hover', colors['primary'])};
+        }}
+
+        QPushButton[buttonType="primary"]:pressed {{
+            background-color: {colors.get('primary_pressed', colors.get('primary_hover', colors['primary']))};
         }}
 
         QPushButton[buttonType="success"] {{
@@ -234,6 +256,10 @@ class ThemeManager(QObject):
             border: none;
             color: white;
             font-weight: bold;
+        }}
+
+        QPushButton[buttonType="success"]:hover {{
+            background-color: {colors.get('success_hover', colors.get('primary_hover', colors['success']))};
         }}
 
         QPushButton[buttonType="warning"] {{
@@ -271,13 +297,13 @@ class ThemeManager(QObject):
             padding: {spacing['small']}px {spacing['normal']}px;
         }}
 
-        QTextEdit, QLineEdit, QComboBox, QSpinBox, QListWidget, QScrollArea {{
+        QTextEdit, QLineEdit, QComboBox, QSpinBox, QListWidget, QScrollArea, QPlainTextEdit {{
             background-color: {colors['card']};
             border: 1px solid {colors['border']};
             border-radius: {radius}px;
         }}
 
-        QTextEdit:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+        QTextEdit:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {{
             border: 2px solid {colors['primary']};
         }}
 
@@ -354,13 +380,13 @@ class ThemeManager(QObject):
         }}
 
         QScrollBar::handle:vertical {{
-            background-color: #cfe1d0;
+            background-color: {colors.get('scrollbar', colors['border'])};
             border-radius: 5px;
             min-height: 36px;
         }}
 
         QScrollBar::handle:vertical:hover {{
-            background-color: #b7d1bb;
+            background-color: {colors.get('scrollbar_hover', colors['secondary_text'])};
         }}
 
         QScrollBar:horizontal {{
@@ -370,13 +396,13 @@ class ThemeManager(QObject):
         }}
 
         QScrollBar::handle:horizontal {{
-            background-color: #cfe1d0;
+            background-color: {colors.get('scrollbar', colors['border'])};
             border-radius: 5px;
             min-width: 36px;
         }}
 
         QScrollBar::handle:horizontal:hover {{
-            background-color: #b7d1bb;
+            background-color: {colors.get('scrollbar_hover', colors['secondary_text'])};
         }}
 
         QScrollBar::add-line:vertical,

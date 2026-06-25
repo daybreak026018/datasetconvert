@@ -6,6 +6,45 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
+from pathlib import Path
+
+
+def _install_safe_weight_writer():
+    """Save best weights as snapshots instead of overwriting best.pt on Windows."""
+    original_write_bytes = Path.write_bytes
+    best_save_counts = {}
+
+    def snapshot_path(path):
+        key = str(path)
+        best_save_counts[key] = best_save_counts.get(key, 0) + 1
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return path.with_name(f"best_{timestamp}_{best_save_counts[key]:03d}{path.suffix}")
+
+    def safe_write_bytes(path, data):
+        if path.suffix.lower() == ".pt" and path.name.lower() == "best.pt":
+            target = snapshot_path(path)
+            original_write_bytes(target, data)
+            print(f"[DataForge] best 权重已按快照保存，不覆盖 best.pt: {target}", flush=True)
+            return len(data)
+
+        try:
+            return original_write_bytes(path, data)
+        except OSError as exc:
+            if path.suffix.lower() != ".pt":
+                raise
+
+            fallback_path = path.with_name(
+                f"{path.stem}_fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}{path.suffix}"
+            )
+            original_write_bytes(fallback_path, data)
+            print(
+                f"[DataForge] 权重覆盖失败，已另存为: {fallback_path}。原错误: {exc}",
+                flush=True,
+            )
+            return len(data)
+
+    Path.write_bytes = safe_write_bytes
 
 
 def _load_yolo():
@@ -19,6 +58,7 @@ def _load_yolo():
 
 
 def run_train(args):
+    _install_safe_weight_writer()
     YOLO = _load_yolo()
     model = YOLO(args.model)
     device = None if args.device == "auto" else args.device
@@ -33,6 +73,7 @@ def run_train(args):
         "workers": args.workers,
         "patience": args.patience,
         "task": args.task,
+        "exist_ok": False,
     }
     if args.resume:
         kwargs["resume"] = True
@@ -101,3 +142,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+

@@ -4,10 +4,14 @@ Compact blue-white YOLO Studio panels.
 
 from __future__ import annotations
 
+import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, Qt
+import yaml
+
+from PyQt5.QtCore import QProcess, QProcessEnvironment, QSettings, Qt
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -33,7 +37,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QUrl
 
 from ..core.yolo_services import (
+    CondaEnvironmentManager,
     EnvironmentChecker,
+    IMAGE_EXTENSIONS,
     RunsManager,
     YOLOCommandBuilder,
     YOLODatasetInspector,
@@ -68,27 +74,27 @@ class YOLOBasePanel(QWidget):
         self.setStyleSheet(
             """
             QLabel#banner {
-                background-color: #edf5ff;
-                border: 1px solid #c8dcf8;
-                border-radius: 10px;
-                padding: 9px 12px;
-                color: #20456d;
+                background-color: #eaf2ff;
+                border: 1px solid #c8daf1;
+                border-radius: 12px;
+                padding: 10px 14px;
+                color: #163153;
             }
 
             QFrame#metricCard {
-                background-color: #f7fbff;
-                border: 1px solid #dbe7f6;
-                border-radius: 10px;
+                background-color: #f8fbff;
+                border: 1px solid #d7e4f3;
+                border-radius: 12px;
             }
 
             QLabel#metricTitle {
-                color: #6d8198;
+                color: #67809b;
                 font-size: 11px;
                 background-color: transparent;
             }
 
             QLabel#metricValue {
-                color: #20456d;
+                color: #163153;
                 font-size: 20px;
                 font-weight: bold;
                 background-color: transparent;
@@ -100,35 +106,35 @@ class YOLOBasePanel(QWidget):
             }
 
             QTabWidget::pane {
-                border: 1px solid #dbe7f6;
-                border-radius: 8px;
+                border: 1px solid #d7e4f3;
+                border-radius: 12px;
                 background-color: #ffffff;
                 top: -1px;
             }
 
             QTabBar::tab {
-                background-color: #f6faff;
-                border: 1px solid #dbe7f6;
+                background-color: #f5f9ff;
+                border: 1px solid #d7e4f3;
                 border-bottom: none;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                color: #5f7895;
-                padding: 7px 12px;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                color: #617a95;
+                padding: 8px 14px;
                 margin-right: 3px;
             }
 
             QTabBar::tab:selected {
                 background-color: #ffffff;
-                color: #20456d;
+                color: #163153;
                 font-weight: bold;
-                border-top: 2px solid #2f7fe8;
+                border-top: 2px solid #2f6fdb;
             }
 
             QLineEdit, QPlainTextEdit, QListWidget {
-                border: 1px solid #dbe7f6;
-                border-radius: 8px;
+                border: 1px solid #d7e4f3;
+                border-radius: 10px;
                 background-color: #fbfdff;
-                padding: 6px 8px;
+                padding: 7px 9px;
             }
             """
         )
@@ -244,8 +250,8 @@ class YOLODataPanel(YOLOBasePanel):
         self.tabs.addTab(self._build_yolo_check_tab(), "YOLO体检")
         self.tabs.addTab(self._wrap_legacy_panel("converter"), "格式转换")
         self.tabs.addTab(self._wrap_legacy_panel("split"), "数据划分")
-        self.tabs.addTab(self._wrap_legacy_panel("analysis"), "分析报告")
-        self.tabs.addTab(self._wrap_legacy_panel("visual"), "可视化预览")
+        self.tabs.addTab(DatasetIntegrityPanel(self), "数据集完整性检查")
+        self.tabs.addTab(LabelClassPreviewPanel(self), "标签类别数量预览")
 
     def _build_yolo_check_tab(self):
         tab = QWidget()
@@ -296,14 +302,8 @@ class YOLODataPanel(YOLOBasePanel):
             from .simple_splitting_panel import SimpleSplittingPanel
 
             panel = SimpleSplittingPanel(self)
-        elif panel_name == "analysis":
-            from .simple_analysis_panel import SimpleAnalysisPanel
-
-            panel = SimpleAnalysisPanel(self)
         else:
-            from .simple_visualization_panel import SimpleVisualizationPanel
-
-            panel = SimpleVisualizationPanel(self)
+            panel = QLabel("未配置的页面")
 
         if hasattr(panel, "apply_theme"):
             panel.apply_theme()
@@ -356,10 +356,353 @@ class YOLODataPanel(YOLOBasePanel):
         return "\n".join(lines)
 
 
+class DatasetIntegrityPanel(YOLOBasePanel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.dataset_path = None
+        self.metric_labels = {}
+        self._build_ui()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(10)
+
+        group = QGroupBox("检查目录")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 16, 12, 12)
+        self.path_edit = QLineEdit()
+        self.path_edit.setReadOnly(True)
+        layout.addLayout(_path_row("数据目录", self.path_edit, _button("选择", self.choose_dataset)))
+        root.addWidget(group)
+
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(10)
+        metrics.setVerticalSpacing(10)
+        for index, key in enumerate(["图片总数", "标签总数", "完整对齐", "问题数量"]):
+            card, label = self._metric_card(key, "0")
+            self.metric_labels[key] = label
+            metrics.addWidget(card, index // 2, index % 2)
+        root.addLayout(metrics)
+
+        actions = QHBoxLayout()
+        actions.addWidget(_button("开始完整性检查", self.scan, "success"))
+        actions.addWidget(_button("打开目录", lambda: self._open_path(self.path_edit.text())))
+        actions.addStretch()
+        root.addLayout(actions)
+
+        self.report = QPlainTextEdit()
+        self.report.setReadOnly(True)
+        self.report.setMinimumHeight(220)
+        root.addWidget(self.report)
+
+    def choose_dataset(self):
+        path = QFileDialog.getExistingDirectory(self, "选择 YOLO 数据集目录", str(Path.cwd()))
+        if path:
+            self.dataset_path = Path(path)
+            self.path_edit.setText(path)
+
+    def scan(self):
+        if not self.path_edit.text():
+            QMessageBox.warning(self, "提示", "请先选择数据集目录。")
+            return
+        stats = self._scan_integrity(Path(self.path_edit.text()))
+        self.metric_labels["图片总数"].setText(str(stats["images"]))
+        self.metric_labels["标签总数"].setText(str(stats["labels"]))
+        self.metric_labels["完整对齐"].setText(str(stats["paired"]))
+        self.metric_labels["问题数量"].setText(str(stats["issues"]))
+        self.report.setPlainText(self._format_integrity(stats))
+
+    def _scan_integrity(self, root: Path):
+        image_root = root / "images"
+        label_root = root / "labels"
+        image_files = self._collect_images(image_root if image_root.exists() else root)
+        label_files = self._collect_label_files(label_root if label_root.exists() else root)
+        image_keys = {self._relative_key(path, image_root, root) for path in image_files}
+        label_keys = {self._relative_key(path, label_root, root) for path in label_files}
+        missing_labels = sorted(image_keys - label_keys)
+        missing_images = sorted(label_keys - image_keys)
+        empty_labels = [str(path) for path in label_files if path.stat().st_size == 0]
+        invalid_rows = []
+        for label in label_files:
+            invalid_rows.extend(self._invalid_rows(label))
+        split_counts = {
+            split: {
+                "images": len([p for p in image_files if split in p.parts]),
+                "labels": len([p for p in label_files if split in p.parts]),
+            }
+            for split in ("train", "val", "test")
+        }
+        issues = len(missing_labels) + len(missing_images) + len(empty_labels) + len(invalid_rows)
+        return {
+            "images": len(image_files),
+            "labels": len(label_files),
+            "paired": len(image_keys & label_keys),
+            "missing_labels": missing_labels,
+            "missing_images": missing_images,
+            "empty_labels": empty_labels,
+            "invalid_rows": invalid_rows,
+            "split_counts": split_counts,
+            "issues": issues,
+        }
+
+    def _collect_images(self, root: Path):
+        if not root.exists():
+            return []
+        return [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+
+    def _collect_label_files(self, root: Path):
+        ignored = {"classes.txt", "labels.txt", "label_map.txt", "label_mapping.txt"}
+        if not root.exists():
+            return []
+        return [path for path in root.rglob("*.txt") if path.name.lower() not in ignored]
+
+    def _relative_key(self, path: Path, preferred_root: Path, fallback_root: Path):
+        try:
+            base = preferred_root if preferred_root.exists() else fallback_root
+            return str(path.relative_to(base).with_suffix("")).replace("\\", "/")
+        except ValueError:
+            return path.stem
+
+    def _invalid_rows(self, label_path: Path):
+        invalid = []
+        for line_no, line in enumerate(label_path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            parts = line.split()
+            if not parts:
+                continue
+            if len(parts) < 5:
+                invalid.append(f"{label_path}:{line_no} 字段不足")
+                continue
+            try:
+                int(float(parts[0]))
+                values = [float(item) for item in parts[1:]]
+            except ValueError:
+                invalid.append(f"{label_path}:{line_no} 非数字字段")
+                continue
+            if any(value < 0 or value > 1 for value in values):
+                invalid.append(f"{label_path}:{line_no} 坐标超出 0-1")
+        return invalid
+
+    def _format_integrity(self, stats):
+        lines = [
+            "数据集完整性检查",
+            f"图片总数: {stats['images']}",
+            f"标签总数: {stats['labels']}",
+            f"完整对齐: {stats['paired']}",
+            "",
+            "子集统计",
+        ]
+        for split, counts in stats["split_counts"].items():
+            lines.append(f"- {split}: 图片 {counts['images']} / 标签 {counts['labels']}")
+        sections = [
+            ("缺少标签的图片", stats["missing_labels"]),
+            ("缺少图片的标签", stats["missing_images"]),
+            ("空标签文件", stats["empty_labels"]),
+            ("异常标签行", stats["invalid_rows"]),
+        ]
+        for title, items in sections:
+            lines.append("")
+            lines.append(f"{title}: {len(items)}")
+            lines.extend(f"- {item}" for item in items[:30])
+            if len(items) > 30:
+                lines.append(f"... 还有 {len(items) - 30} 项")
+        return "\n".join(lines)
+
+
+class LabelClassPreviewPanel(YOLOBasePanel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.metric_labels = {}
+        self._build_ui()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(10)
+
+        group = QGroupBox("预览目录")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 16, 12, 12)
+        self.path_edit = QLineEdit()
+        self.path_edit.setReadOnly(True)
+        layout.addLayout(_path_row("数据目录", self.path_edit, _button("选择", self.choose_dataset)))
+        task_row = QHBoxLayout()
+        task_row.addWidget(QLabel("任务类型"))
+        self.task_combo = QComboBox()
+        self.task_combo.addItems(["detect", "segment", "classify"])
+        task_row.addWidget(self.task_combo, 1)
+        layout.addLayout(task_row)
+        root.addWidget(group)
+
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(10)
+        metrics.setVerticalSpacing(10)
+        for index, key in enumerate(["类别数量", "标签实例", "标签文件", "图片数量"]):
+            card, label = self._metric_card(key, "0")
+            self.metric_labels[key] = label
+            metrics.addWidget(card, index // 2, index % 2)
+        root.addLayout(metrics)
+
+        actions = QHBoxLayout()
+        actions.addWidget(_button("生成类别预览", self.preview, "success"))
+        actions.addWidget(_button("打开目录", lambda: self._open_path(self.path_edit.text())))
+        actions.addStretch()
+        root.addLayout(actions)
+
+        self.report = QPlainTextEdit()
+        self.report.setReadOnly(True)
+        self.report.setMinimumHeight(240)
+        root.addWidget(self.report)
+
+    def choose_dataset(self):
+        path = QFileDialog.getExistingDirectory(self, "选择 YOLO 数据集目录", str(Path.cwd()))
+        if path:
+            self.path_edit.setText(path)
+
+    def preview(self):
+        if not self.path_edit.text():
+            QMessageBox.warning(self, "提示", "请先选择数据集目录。")
+            return
+        root = Path(self.path_edit.text())
+        task = self.task_combo.currentText()
+        stats = self._scan_classification(root) if task == "classify" else self._scan_yolo_labels(root)
+        self.metric_labels["类别数量"].setText(str(stats["class_count"]))
+        self.metric_labels["标签实例"].setText(str(stats["instances"]))
+        self.metric_labels["标签文件"].setText(str(stats["label_files"]))
+        self.metric_labels["图片数量"].setText(str(stats["images"]))
+        self.report.setPlainText(self._format_distribution(stats))
+
+    def _scan_yolo_labels(self, root: Path):
+        label_root = root / "labels"
+        labels = self._collect_label_files(label_root if label_root.exists() else root)
+        image_root = root / "images"
+        images = self._collect_images(image_root if image_root.exists() else root)
+        names = self._read_class_names(root)
+        counts = {}
+        invalid_class_ids = []
+        empty_files = 0
+        for label in labels:
+            lines = label.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if not lines:
+                empty_files += 1
+            for line_no, line in enumerate(lines, 1):
+                parts = line.split()
+                if not parts:
+                    continue
+                try:
+                    class_id = int(float(parts[0]))
+                except ValueError:
+                    invalid_class_ids.append(f"{label}:{line_no} 类别ID无效")
+                    continue
+                counts[class_id] = counts.get(class_id, 0) + 1
+        total = sum(counts.values())
+        class_count = max(len(names), len(counts))
+        return {
+            "task": "detect/segment",
+            "names": names,
+            "counts": counts,
+            "instances": total,
+            "label_files": len(labels),
+            "images": len(images),
+            "class_count": class_count,
+            "empty_files": empty_files,
+            "invalid_class_ids": invalid_class_ids,
+        }
+
+    def _scan_classification(self, root: Path):
+        counts = {}
+        for split in ("train", "val", "test"):
+            split_dir = root / split
+            if not split_dir.exists():
+                continue
+            for class_dir in split_dir.iterdir():
+                if not class_dir.is_dir():
+                    continue
+                counts[class_dir.name] = counts.get(class_dir.name, 0) + len(
+                    [path for path in class_dir.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+                )
+        return {
+            "task": "classify",
+            "names": sorted(counts),
+            "counts": counts,
+            "instances": sum(counts.values()),
+            "label_files": 0,
+            "images": sum(counts.values()),
+            "class_count": len(counts),
+            "empty_files": 0,
+            "invalid_class_ids": [],
+        }
+
+    def _collect_images(self, root: Path):
+        if not root.exists():
+            return []
+        return [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+
+    def _collect_label_files(self, root: Path):
+        ignored = {"classes.txt", "labels.txt", "label_map.txt", "label_mapping.txt"}
+        if not root.exists():
+            return []
+        return [path for path in root.rglob("*.txt") if path.name.lower() not in ignored]
+
+    def _read_class_names(self, root: Path):
+        data_yaml = root / "data.yaml"
+        if data_yaml.exists():
+            try:
+                data = yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}
+                names = data.get("names", [])
+                if isinstance(names, dict):
+                    return [str(names[key]) for key in sorted(names)]
+                if isinstance(names, list):
+                    return [str(name) for name in names]
+            except Exception:
+                pass
+        classes = root / "classes.txt"
+        if classes.exists():
+            return [line.strip() for line in classes.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return []
+
+    def _format_distribution(self, stats):
+        lines = [
+            "标签类别数量预览",
+            f"任务类型: {stats['task']}",
+            f"类别数量: {stats['class_count']}",
+            f"标签实例/图片样本: {stats['instances']}",
+            f"标签文件: {stats['label_files']}",
+            f"图片数量: {stats['images']}",
+            f"空标签文件: {stats['empty_files']}",
+            "",
+            "类别分布",
+        ]
+        counts = stats["counts"]
+        max_count = max(counts.values(), default=0)
+        if stats["task"] == "classify":
+            items = sorted(counts.items(), key=lambda item: item[0])
+            for name, count in items:
+                lines.append(self._bar_line(name, count, max_count, stats["instances"]))
+        else:
+            for class_id in sorted(counts):
+                name = stats["names"][class_id] if class_id < len(stats["names"]) else f"class_{class_id}"
+                lines.append(self._bar_line(f"{class_id} {name}", counts[class_id], max_count, stats["instances"]))
+        if stats["invalid_class_ids"]:
+            lines.append("")
+            lines.append(f"异常类别ID: {len(stats['invalid_class_ids'])}")
+            lines.extend(f"- {item}" for item in stats["invalid_class_ids"][:20])
+        return "\n".join(lines)
+
+    def _bar_line(self, name, count, max_count, total):
+        width = 24
+        filled = int(count / max_count * width) if max_count else 0
+        percent = count / total * 100 if total else 0
+        return f"{name}: {count} ({percent:.1f}%) {'#' * filled}"
+
+
 class YOLOEnvironmentPanel(YOLOBasePanel):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.settings = QSettings("DataForge", "YOLOStudio")
+        self.conda_envs = []
         self._build_ui()
+        self.refresh_envs()
         self.refresh()
 
     def _build_ui(self):
@@ -370,17 +713,63 @@ class YOLOEnvironmentPanel(YOLOBasePanel):
         banner.setObjectName("banner")
         banner.setWordWrap(True)
         root.addWidget(banner)
-        root.addWidget(_button("重新检测", self.refresh, "success"))
+
+        env_group = QGroupBox("Conda / Python 环境")
+        env_layout = QVBoxLayout(env_group)
+        env_layout.setContentsMargins(12, 16, 12, 12)
+        env_layout.setSpacing(8)
+        self.env_combo = QComboBox()
+        env_layout.addWidget(self.env_combo)
+        env_actions = QHBoxLayout()
+        env_actions.addWidget(_button("刷新环境", self.refresh_envs))
+        env_actions.addWidget(_button("保存为训练/检测环境", self.save_selected_env, "success"))
+        env_actions.addWidget(_button("检测当前选择", self.refresh))
+        env_actions.addStretch()
+        env_layout.addLayout(env_actions)
+        root.addWidget(env_group)
+
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
-        self.report.setMinimumHeight(300)
+        self.report.setMinimumHeight(250)
         root.addWidget(self.report)
 
+    def refresh_envs(self):
+        selected_python = self.settings.value("selected_python", "")
+        self.conda_envs = CondaEnvironmentManager.list_environments()
+        self.env_combo.clear()
+        selected_index = 0
+        for index, env in enumerate(self.conda_envs):
+            label = f"{env['name']}  |  {env['python']}"
+            self.env_combo.addItem(label, env)
+            if selected_python and env["python"] == selected_python:
+                selected_index = index
+        if self.conda_envs:
+            self.env_combo.setCurrentIndex(selected_index)
+
+    def save_selected_env(self):
+        env = self.env_combo.currentData()
+        if not env:
+            QMessageBox.warning(self, "提示", "没有可保存的环境。")
+            return
+        self.settings.setValue("selected_env_name", env["name"])
+        self.settings.setValue("selected_env_path", env["path"])
+        self.settings.setValue("selected_python", env["python"])
+        QMessageBox.information(self, "完成", f"已切换到环境：{env['name']}")
+        self.refresh()
+
     def refresh(self):
-        report = EnvironmentChecker.check()
+        env = self.env_combo.currentData() if hasattr(self, "env_combo") else None
+        python_executable = env["python"] if env else ""
+        env_name = env["name"] if env else "当前环境"
+        report = EnvironmentChecker.check(python_executable, env_name)
+        saved_python = self.settings.value("selected_python", "")
+        selected_note = "是" if saved_python and saved_python == report.python_executable else "否"
         self.report.setPlainText(
             "\n".join(
                 [
+                    f"当前选择: {report.environment_name}",
+                    f"是否已保存为训练/检测环境: {selected_note}",
+                    f"Python路径: {report.python_executable}",
                     f"状态: {report.status}",
                     f"系统: {report.platform}",
                     f"Python: {report.python_version}",
@@ -403,21 +792,25 @@ class YOLOEnvironmentPanel(YOLOBasePanel):
 
 class YOLOProcessPanel(YOLOBasePanel):
     process_kind = "process"
+    ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.process = None
+        self.settings = QSettings("DataForge", "YOLOStudio")
 
     def _start_process(self, command: list[str], cwd: Path):
         if self.process and self.process.state() != QProcess.NotRunning:
             QMessageBox.warning(self, "提示", "已有任务正在运行。")
             return
         self.log.clear()
+        self.log.appendPlainText(f"使用环境: {self._selected_env_name()}\n")
         self.log.appendPlainText("执行命令:\n" + subprocess.list2cmdline(command) + "\n")
         self.process = QProcess(self)
         self.process.setProgram(command[0])
         self.process.setArguments(command[1:])
         self.process.setWorkingDirectory(str(cwd))
+        self.process.setProcessEnvironment(self._process_environment(command[0]))
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self._read_output)
         self.process.finished.connect(self._finished)
@@ -426,7 +819,9 @@ class YOLOProcessPanel(YOLOBasePanel):
     def _read_output(self):
         data = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="ignore")
         if data:
-            self.log.appendPlainText(data.rstrip())
+            cleaned = self._clean_process_output(data)
+            if cleaned:
+                self.log.appendPlainText(cleaned.rstrip())
 
     def _finished(self, exit_code, exit_status):
         status = "完成" if exit_code == 0 else f"失败({exit_code})"
@@ -436,6 +831,37 @@ class YOLOProcessPanel(YOLOBasePanel):
         if self.process and self.process.state() != QProcess.NotRunning:
             self.process.terminate()
             self.log.appendPlainText("\n已请求停止任务。")
+
+    def _selected_python(self):
+        return self.settings.value("selected_python", "")
+
+    def _selected_env_name(self):
+        return self.settings.value("selected_env_name", "当前Python")
+
+    def _selected_env_label(self):
+        python = self._selected_python()
+        if python:
+            return f"{self._selected_env_name()} | {python}"
+        return f"{self._selected_env_name()} | 当前进程 Python"
+
+    def _process_environment(self, python_executable: str):
+        env = QProcessEnvironment.systemEnvironment()
+        python_path = Path(python_executable)
+        env_root = python_path.parent
+        path_parts = [
+            str(env_root),
+            str(env_root / "Scripts"),
+            str(env_root / "Library" / "bin"),
+            env.value("PATH", ""),
+        ]
+        env.insert("PATH", ";".join(part for part in path_parts if part))
+        return env
+
+    def _clean_process_output(self, text: str):
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = self.ANSI_ESCAPE_RE.sub("", text)
+        text = text.replace("\x00", "")
+        return text
 
 
 class YOLOTrainingPanel(YOLOProcessPanel):
@@ -447,7 +873,7 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(12)
-        banner = QLabel("本机一键训练：选择任务、模型和数据后启动，日志会实时输出。")
+        banner = QLabel("本机一键训练：选择任务、YOLO版本和数据后启动。勾选预训练时使用 .pt，不勾选时从 .yaml 开始训练。")
         banner.setObjectName("banner")
         banner.setWordWrap(True)
         root.addWidget(banner)
@@ -462,10 +888,24 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         self.task_combo.addItems(["detect", "segment", "classify"])
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
-        self.model_combo.addItems(["yolo26n.pt", "yolo26s.pt", "yolo26m.pt", "yolo11n.pt", "yolov8n.pt"])
+        self.model_combo.addItems(
+            [
+                "yolo26n",
+                "yolo26s",
+                "yolo26m",
+                "yolo26l",
+                "yolo26x",
+                "yolo11n",
+                "yolo11s",
+                "yolov8n",
+            ]
+        )
         self.data_edit = QLineEdit()
+        self.env_edit = QLineEdit()
+        self.env_edit.setReadOnly(True)
+        self.env_edit.setText(self._selected_env_label())
         self.project_edit = QLineEdit(str(Path.cwd() / "runs" / "train"))
-        self.name_edit = QLineEdit("exp")
+        self.name_edit = QLineEdit(self._default_run_name())
         self.epochs_spin = self._spin(1, 1000, 100)
         self.imgsz_spin = self._spin(64, 2048, 640)
         self.batch_spin = self._spin(1, 512, 16)
@@ -474,12 +914,15 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         self.device_combo = QComboBox()
         self.device_combo.setEditable(True)
         self.device_combo.addItems(["auto", "cpu", "0"])
+        self.pretrained_check = QCheckBox("使用预训练权重（.pt）")
+        self.pretrained_check.setChecked(True)
         self.resume_check = QCheckBox("恢复训练 resume=True")
 
         rows = [
             ("任务", self.task_combo),
-            ("模型", self.model_combo),
+            ("YOLO版本", self.model_combo),
             ("数据", self.data_edit),
+            ("运行环境", self.env_edit),
             ("输出", self.project_edit),
             ("名称", self.name_edit),
             ("epochs", self.epochs_spin),
@@ -492,8 +935,9 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         for index, (label, widget) in enumerate(rows):
             grid.addWidget(QLabel(label), index // 2, (index % 2) * 2)
             grid.addWidget(widget, index // 2, (index % 2) * 2 + 1)
-        grid.addWidget(self.resume_check, 6, 0, 1, 2)
-        grid.addWidget(_button("选择 data.yaml/分类目录", self.choose_data), 6, 2, 1, 2)
+        grid.addWidget(self.pretrained_check, 6, 0, 1, 2)
+        grid.addWidget(self.resume_check, 6, 2, 1, 2)
+        grid.addWidget(_button("选择 data.yaml/分类目录", self.choose_data), 7, 2, 1, 2)
         root.addWidget(group)
 
         actions = QHBoxLayout()
@@ -514,6 +958,19 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         spin.setValue(value)
         return spin
 
+    def _default_run_name(self):
+        return f"train_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    def _resolved_model_name(self):
+        version = self.model_combo.currentText().strip()
+        if not version:
+            version = "yolo26n"
+            self.model_combo.setCurrentText(version)
+        if version.endswith(".pt") or version.endswith(".yaml"):
+            return version
+        suffix = ".pt" if self.pretrained_check.isChecked() else ".yaml"
+        return f"{version}{suffix}"
+
     def choose_data(self):
         if self.task_combo.currentText() == "classify":
             path = QFileDialog.getExistingDirectory(self, "选择分类数据集根目录", str(Path.cwd()))
@@ -523,22 +980,34 @@ class YOLOTrainingPanel(YOLOProcessPanel):
             self.data_edit.setText(path)
 
     def start_training(self):
+        self.env_edit.setText(self._selected_env_label())
         if not self.data_edit.text():
             QMessageBox.warning(self, "提示", "请先选择训练数据。")
             return
+        run_name = self.name_edit.text().strip()
+        if not run_name or run_name == "exp":
+            run_name = self._default_run_name()
+            self.name_edit.setText(run_name)
+        resolved_model = self._resolved_model_name()
+        self.log.appendPlainText(
+            f"模型版本: {self.model_combo.currentText().strip()} | "
+            f"{'预训练权重' if self.pretrained_check.isChecked() else '从配置开始训练'} | "
+            f"实际模型文件: {resolved_model}\n"
+        )
         cfg = YOLOTrainConfig(
             task=self.task_combo.currentText(),
-            model=self.model_combo.currentText(),
+            model=resolved_model,
             data_yaml=self.data_edit.text(),
             epochs=self.epochs_spin.value(),
             imgsz=self.imgsz_spin.value(),
             batch=self.batch_spin.value(),
             device=self.device_combo.currentText(),
             project=self.project_edit.text(),
-            name=self.name_edit.text() or "exp",
+            name=run_name,
             workers=self.workers_spin.value(),
             patience=self.patience_spin.value(),
             resume=self.resume_check.isChecked(),
+            python_executable=self._selected_python(),
         )
         self._start_process(YOLOCommandBuilder.build_train(cfg), Path.cwd())
 
@@ -564,6 +1033,9 @@ class YOLOPredictPanel(YOLOProcessPanel):
         self.task_combo.addItems(["detect", "segment", "classify"])
         self.model_edit = QLineEdit()
         self.source_edit = QLineEdit()
+        self.env_edit = QLineEdit()
+        self.env_edit.setReadOnly(True)
+        self.env_edit.setText(self._selected_env_label())
         self.output_edit = QLineEdit(str(Path.cwd() / "runs" / "predict"))
         self.device_combo = QComboBox()
         self.device_combo.setEditable(True)
@@ -580,6 +1052,7 @@ class YOLOPredictPanel(YOLOProcessPanel):
             ("任务", self.task_combo),
             ("权重", self.model_edit),
             ("输入源", self.source_edit),
+            ("运行环境", self.env_edit),
             ("输出", self.output_edit),
             ("conf", self.conf_spin),
             ("iou", self.iou_spin),
@@ -589,10 +1062,10 @@ class YOLOPredictPanel(YOLOProcessPanel):
         for index, (label, widget) in enumerate(rows):
             grid.addWidget(QLabel(label), index // 2, (index % 2) * 2)
             grid.addWidget(widget, index // 2, (index % 2) * 2 + 1)
-        grid.addWidget(self.save_txt_check, 4, 0)
-        grid.addWidget(self.save_conf_check, 4, 1)
-        grid.addWidget(_button("选择权重", self.choose_model), 4, 2)
-        grid.addWidget(_button("选择输入", self.choose_source), 4, 3)
+        grid.addWidget(self.save_txt_check, 5, 0)
+        grid.addWidget(self.save_conf_check, 5, 1)
+        grid.addWidget(_button("选择权重", self.choose_model), 5, 2)
+        grid.addWidget(_button("选择输入", self.choose_source), 5, 3)
         root.addWidget(group)
 
         actions = QHBoxLayout()
@@ -633,6 +1106,7 @@ class YOLOPredictPanel(YOLOProcessPanel):
             self.source_edit.setText(path)
 
     def start_predict(self):
+        self.env_edit.setText(self._selected_env_label())
         if not self.model_edit.text() or not self.source_edit.text():
             QMessageBox.warning(self, "提示", "请先选择权重和输入源。")
             return
@@ -647,6 +1121,7 @@ class YOLOPredictPanel(YOLOProcessPanel):
             save_txt=self.save_txt_check.isChecked(),
             save_conf=self.save_conf_check.isChecked(),
             output_dir=self.output_edit.text(),
+            python_executable=self._selected_python(),
         )
         self._start_process(YOLOCommandBuilder.build_predict(cfg), Path.cwd())
 
