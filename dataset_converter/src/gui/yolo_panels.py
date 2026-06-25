@@ -47,6 +47,7 @@ from ..core.yolo_services import (
     YOLOPredictConfig,
     YOLOTrainConfig,
 )
+from ..utils.worker_thread import WorkerThread
 
 
 def _button(text: str, handler=None, button_type: str = "", height: int = 36) -> QPushButton:
@@ -1750,3 +1751,272 @@ class YOLOSettingsPanel(YOLOBasePanel):
             }
             """
         )
+
+
+def _perf_load_home_snapshot(selected_python: str, selected_env_name: str, runs_root: str):
+    report = EnvironmentChecker.check(selected_python, selected_env_name)
+    runs = RunsManager(Path(runs_root)).list_runs()
+    train_runs = [item for item in runs if "train" in item["path"].lower()]
+    predict_runs = [item for item in runs if "predict" in item["path"].lower()]
+    weights = [item for item in runs if item.get("best") or item.get("last")]
+    return {
+        "status": report.status,
+        "env_name": selected_env_name,
+        "train_name": train_runs[0]["name"] if train_runs else "暂无",
+        "predict_name": predict_runs[0]["name"] if predict_runs else "暂无",
+        "summary": "\n".join(
+            [
+                f"默认输出目录: {runs_root}",
+                f"训练/检测环境: {selected_env_name}",
+                f"Python: {report.python_version}",
+                f"PyTorch: {report.torch_version}",
+                f"CUDA: {report.cuda_version or '未检测到'}",
+                f"GPU: {report.gpu_name or '无'}",
+                f"可用权重: {len(weights)}",
+                f"Ultralytics: {report.ultralytics_version or '未安装'}",
+            ]
+        ),
+    }
+
+
+def _perf_load_envs(selected_python: str):
+    envs = CondaEnvironmentManager.list_environments()
+    selected_index = 0
+    for index, env in enumerate(envs):
+        if selected_python and env["python"] == selected_python:
+            selected_index = index
+            break
+    return {"envs": envs, "selected_index": selected_index}
+
+
+def _perf_load_env_report(python_executable: str, env_name: str, saved_python: str):
+    report = EnvironmentChecker.check(python_executable, env_name)
+    selected_note = "是" if saved_python and saved_python == report.python_executable else "否"
+    return "\n".join(
+        [
+            f"当前选择: {report.environment_name}",
+            f"是否已保存为训练/检测环境: {selected_note}",
+            f"Python路径: {report.python_executable}",
+            f"状态: {report.status}",
+            f"系统: {report.platform}",
+            f"Python: {report.python_version}",
+            f"PyTorch: {report.torch_version}",
+            f"CUDA 可用: {'是' if report.cuda_available else '否'}",
+            f"CUDA 版本: {report.cuda_version}",
+            f"GPU: {report.gpu_name}",
+            f"Ultralytics: {report.ultralytics_version}",
+            f"OpenCV: {report.opencv_version}",
+            "",
+            "CPU 安装命令:",
+            report.cpu_install_command,
+            "",
+            "GPU 安装建议:",
+            report.gpu_install_command,
+        ]
+    )
+
+
+def _perf_load_runs_snapshot(runs_root: str):
+    return RunsManager(Path(runs_root)).list_runs()
+
+
+_PerformanceLegacyHome = YOLOHomePanel
+_PerformanceLegacyEnvironment = YOLOEnvironmentPanel
+_PerformanceLegacyTraining = YOLOTrainingPanel
+_PerformanceLegacyPredict = YOLOPredictPanel
+_PerformanceLegacyRuns = YOLORunsPanel
+_PerformanceLegacySettings = YOLOSettingsPanel
+
+
+class YOLOHomePanel(_PerformanceLegacyHome):
+    def __init__(self, parent=None):
+        self._refresh_worker = None
+        super().__init__(parent)
+
+    def on_panel_activated(self):
+        self.refresh()
+
+    def refresh(self):
+        if self._refresh_worker and self._refresh_worker.isRunning():
+            return
+        self.summary.setPlainText("正在刷新总览，请稍候...")
+        selected_python = self.settings.value("selected_python", "")
+        selected_env_name = self.settings.value("selected_env_name", "当前Python")
+        runs_root = str(self._default_output_root())
+        self._refresh_worker = WorkerThread(_perf_load_home_snapshot, selected_python, selected_env_name, runs_root)
+        self._refresh_worker.signals.finished.connect(self._apply_perf_snapshot)
+        self._refresh_worker.signals.error.connect(self._perf_refresh_failed)
+        self._refresh_worker.start()
+
+    def _apply_perf_snapshot(self, snapshot):
+        status_key = next((key for key in self.metrics if "状态" in key), list(self.metrics.keys())[0])
+        env_key = next((key for key in self.metrics if "环境" in key and "状态" not in key), list(self.metrics.keys())[1])
+        train_key = next((key for key in self.metrics if "训练" in key), list(self.metrics.keys())[2])
+        predict_key = next((key for key in self.metrics if "检测" in key), list(self.metrics.keys())[3])
+        self.metrics[status_key].setText(snapshot["status"])
+        self.metrics[env_key].setText(snapshot["env_name"])
+        self.metrics[train_key].setText(snapshot["train_name"])
+        self.metrics[predict_key].setText(snapshot["predict_name"])
+        self.summary.setPlainText(snapshot["summary"])
+        self._refresh_worker = None
+
+    def _perf_refresh_failed(self, error_text):
+        self.summary.setPlainText(f"总览刷新失败：\n{error_text}")
+        self._refresh_worker = None
+
+
+class YOLOEnvironmentPanel(_PerformanceLegacyEnvironment):
+    def __init__(self, parent=None):
+        self._envs_worker = None
+        self._report_worker = None
+        super().__init__(parent)
+
+    def on_panel_activated(self):
+        self.refresh_envs()
+        self.refresh()
+
+    def refresh_envs(self):
+        if self._envs_worker and self._envs_worker.isRunning():
+            return
+        selected_python = self.settings.value("selected_python", "")
+        self.env_combo.clear()
+        self.env_combo.addItem("正在加载环境...", None)
+        self._envs_worker = WorkerThread(_perf_load_envs, selected_python)
+        self._envs_worker.signals.finished.connect(self._apply_perf_envs)
+        self._envs_worker.signals.error.connect(self._perf_envs_failed)
+        self._envs_worker.start()
+
+    def _apply_perf_envs(self, payload):
+        self.conda_envs = payload["envs"]
+        self.env_combo.clear()
+        for env in self.conda_envs:
+            self.env_combo.addItem(f"{env['name']}  |  {env['python']}", env)
+        if self.conda_envs:
+            self.env_combo.setCurrentIndex(payload["selected_index"])
+        self._envs_worker = None
+
+    def _perf_envs_failed(self, error_text):
+        self.env_combo.clear()
+        self.env_combo.addItem("环境加载失败", None)
+        self.report.setPlainText(f"环境列表加载失败：\n{error_text}")
+        self._envs_worker = None
+
+    def refresh(self):
+        if self._report_worker and self._report_worker.isRunning():
+            return
+        env = self.env_combo.currentData() if hasattr(self, "env_combo") else None
+        python_executable = env["python"] if env else ""
+        env_name = env["name"] if env else "当前环境"
+        saved_python = self.settings.value("selected_python", "")
+        self.report.setPlainText("正在检测当前环境，请稍候...")
+        self._report_worker = WorkerThread(_perf_load_env_report, python_executable, env_name, saved_python)
+        self._report_worker.signals.finished.connect(self._apply_perf_report)
+        self._report_worker.signals.error.connect(self._perf_report_failed)
+        self._report_worker.start()
+
+    def _apply_perf_report(self, text):
+        self.report.setPlainText(text)
+        self._report_worker = None
+
+    def _perf_report_failed(self, error_text):
+        self.report.setPlainText(f"环境检测失败：\n{error_text}")
+        self._report_worker = None
+
+    def save_selected_env(self):
+        env = self.env_combo.currentData()
+        if not env:
+            QMessageBox.warning(self, "提示", "没有可保存的环境。")
+            return
+        self.settings.setValue("selected_env_name", env["name"])
+        self.settings.setValue("selected_env_path", env["path"])
+        self.settings.setValue("selected_python", env["python"])
+        QMessageBox.information(self, "完成", f"已切换到环境：{env['name']}")
+        self.refresh()
+        home = self.window()
+        if hasattr(home, "panels"):
+            for panel in home.panels:
+                if panel is None:
+                    continue
+                if hasattr(panel, "refresh_env_display"):
+                    panel.refresh_env_display()
+                if hasattr(panel, "refresh") and panel.__class__.__name__ == "YOLOHomePanel":
+                    panel.refresh()
+
+
+class YOLOTrainingPanel(_PerformanceLegacyTraining):
+    def on_panel_activated(self):
+        self.refresh_output_root()
+        self.refresh_env_display()
+
+
+class YOLOPredictPanel(_PerformanceLegacyPredict):
+    def on_panel_activated(self):
+        self.refresh_output_root()
+        self.refresh_env_display()
+
+
+class YOLORunsPanel(_PerformanceLegacyRuns):
+    def __init__(self, parent=None):
+        self._runs_worker = None
+        super().__init__(parent)
+
+    def on_panel_activated(self):
+        self.refresh_output_root()
+        self.refresh()
+
+    def refresh_output_root(self):
+        self.runs_root = self._default_output_root()
+
+    def refresh(self):
+        if self._runs_worker and self._runs_worker.isRunning():
+            return
+        self.list_widget.clear()
+        self.detail.setPlainText("正在扫描结果目录，请稍候...")
+        self._runs_worker = WorkerThread(_perf_load_runs_snapshot, str(self.runs_root))
+        self._runs_worker.signals.finished.connect(self._apply_perf_runs)
+        self._runs_worker.signals.error.connect(self._perf_runs_failed)
+        self._runs_worker.start()
+
+    def _apply_perf_runs(self, runs):
+        self.runs = runs
+        self.list_widget.clear()
+        for item in self.runs:
+            self.list_widget.addItem(f"[{self._display_type(item)}] {item['modified']}  {item['path']}")
+        self.detail.setPlainText(f"共发现 {len(self.runs)} 个结果。")
+        self.curve_preview.setPixmap(QPixmap())
+        self.curve_preview.setText("暂无训练曲线")
+        self.preview_list.set_images([])
+        if self.runs:
+            self.list_widget.setCurrentRow(0)
+        self._runs_worker = None
+
+    def _perf_runs_failed(self, error_text):
+        self.list_widget.clear()
+        self.detail.setPlainText(f"结果扫描失败：\n{error_text}")
+        self._runs_worker = None
+
+
+class YOLOSettingsPanel(_PerformanceLegacySettings):
+    def save_output_root(self):
+        path_text = self.output_root_edit.text().strip()
+        if not path_text:
+            QMessageBox.warning(self, "提示", "请输入有效的输出目录。")
+            return
+
+        output_root = Path(path_text)
+        output_root.mkdir(parents=True, exist_ok=True)
+        self.settings.setValue("default_output_dir", str(output_root))
+
+        home = self.window()
+        if hasattr(home, "panels"):
+            for panel in home.panels:
+                if panel is None:
+                    continue
+                if hasattr(panel, "refresh_output_root"):
+                    panel.refresh_output_root()
+                if hasattr(panel, "refresh_env_display"):
+                    panel.refresh_env_display()
+                if hasattr(panel, "refresh") and panel.__class__.__name__ == "YOLOHomePanel":
+                    panel.refresh()
+
+        QMessageBox.information(self, "完成", "默认输出目录已更新，并已同步到训练、检测和结果页面。")

@@ -78,6 +78,8 @@ class SimpleHomeWindow(QMainWindow):
         self._sync_app_styles()
         self.nav_cards = []
         self.panels = []
+        self.panel_classes = []
+        self.panel_placeholders = []
         self.current_index = 0
         self._build_ui()
         self._build_panels()
@@ -206,25 +208,68 @@ class SimpleHomeWindow(QMainWindow):
             YOLOTrainingPanel,
         )
 
-        self.panels = [
+        self.panel_classes = [
             YOLOHomePanel(self),
-            YOLODataPanel(self),
-            YOLOEnvironmentPanel(self),
-            YOLOTrainingPanel(self),
-            YOLOPredictPanel(self),
-            YOLORunsPanel(self),
-            YOLOSettingsPanel(self),
+            YOLODataPanel,
+            YOLOEnvironmentPanel,
+            YOLOTrainingPanel,
+            YOLOPredictPanel,
+            YOLORunsPanel,
+            YOLOSettingsPanel,
         ]
+        self.panels = [None] * len(self.panel_classes)
+        self.panel_placeholders = []
+        for index, _panel_class in enumerate(self.panel_classes):
+            placeholder = self._create_panel_placeholder(index)
+            self.panel_placeholders.append(placeholder)
+            self.stack.addWidget(placeholder)
 
-        for panel in self.panels:
-            if hasattr(panel, "apply_theme"):
-                panel.apply_theme()
-            self.stack.addWidget(panel)
+    def _create_panel_placeholder(self, index: int):
+        title, subtitle = self.NAV_ITEMS[index]
+        container = QFrame()
+        container.setObjectName("panelPlaceholder")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(8)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("placeholderTitle")
+        desc_label = QLabel(f"{subtitle}\n页面正在初始化，请稍候。")
+        desc_label.setObjectName("placeholderDesc")
+        desc_label.setWordWrap(True)
+
+        layout.addStretch()
+        layout.addWidget(title_label, 0, Qt.AlignHCenter)
+        layout.addWidget(desc_label, 0, Qt.AlignHCenter)
+        layout.addStretch()
+        return container
+
+    def _ensure_panel(self, index: int):
+        panel = self.panels[index]
+        if panel is not None:
+            return panel
+
+        panel_class = self.panel_classes[index]
+        if index == 0:
+            panel = panel_class
+        else:
+            panel = panel_class(self)
+        if hasattr(panel, "apply_theme"):
+            panel.apply_theme()
+
+        placeholder = self.panel_placeholders[index]
+        self.stack.insertWidget(index, panel)
+        self.stack.removeWidget(placeholder)
+        placeholder.deleteLater()
+        self.panels[index] = panel
+        self.panel_placeholders[index] = None
+        return panel
 
     def switch_panel(self, index: int):
         if index < 0 or index >= len(self.NAV_ITEMS):
             return
 
+        current_panel = self._ensure_panel(index)
         self.current_index = index
         self.stack.setCurrentIndex(index)
 
@@ -235,13 +280,16 @@ class SimpleHomeWindow(QMainWindow):
         for card_index, card in enumerate(self.nav_cards):
             card.set_selected(card_index == index)
 
-        current_panel = self.panels[index]
         if hasattr(current_panel, "apply_theme"):
             current_panel.apply_theme()
-        if hasattr(current_panel, "refresh"):
-            current_panel.refresh()
         if hasattr(current_panel, "refresh_output_root"):
             current_panel.refresh_output_root()
+        if hasattr(current_panel, "refresh_env_display"):
+            current_panel.refresh_env_display()
+        if hasattr(current_panel, "on_panel_activated"):
+            current_panel.on_panel_activated()
+        elif hasattr(current_panel, "refresh"):
+            current_panel.refresh()
 
     def _apply_shell_style(self):
         blue_base = theme_manager.generate_stylesheet("light")
@@ -325,6 +373,25 @@ class SimpleHomeWindow(QMainWindow):
         }
 
         QScrollArea#contentScroll > QWidget > QWidget {
+            background-color: transparent;
+        }
+
+        QFrame#panelPlaceholder {
+            background-color: #ffffff;
+            border: 1px dashed #c8d8eb;
+            border-radius: 14px;
+        }
+
+        QLabel#placeholderTitle {
+            color: #163153;
+            font-size: 18px;
+            font-weight: 700;
+            background-color: transparent;
+        }
+
+        QLabel#placeholderDesc {
+            color: #6d829c;
+            font-size: 11px;
             background-color: transparent;
         }
         """
