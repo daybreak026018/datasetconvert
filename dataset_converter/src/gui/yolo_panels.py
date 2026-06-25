@@ -1753,7 +1753,7 @@ class YOLOSettingsPanel(YOLOBasePanel):
         )
 
 
-def _perf_load_home_snapshot(selected_python: str, selected_env_name: str, runs_root: str):
+def _perf_load_home_snapshot(selected_python: str, selected_env_name: str, runs_root: str, **_kwargs):
     report = EnvironmentChecker.check(selected_python, selected_env_name)
     runs = RunsManager(Path(runs_root)).list_runs()
     train_runs = [item for item in runs if "train" in item["path"].lower()]
@@ -1779,7 +1779,7 @@ def _perf_load_home_snapshot(selected_python: str, selected_env_name: str, runs_
     }
 
 
-def _perf_load_envs(selected_python: str):
+def _perf_load_envs(selected_python: str, **_kwargs):
     envs = CondaEnvironmentManager.list_environments()
     selected_index = 0
     for index, env in enumerate(envs):
@@ -1789,7 +1789,7 @@ def _perf_load_envs(selected_python: str):
     return {"envs": envs, "selected_index": selected_index}
 
 
-def _perf_load_env_report(python_executable: str, env_name: str, saved_python: str):
+def _perf_load_env_report(python_executable: str, env_name: str, saved_python: str, **_kwargs):
     report = EnvironmentChecker.check(python_executable, env_name)
     selected_note = "是" if saved_python and saved_python == report.python_executable else "否"
     return "\n".join(
@@ -1816,7 +1816,7 @@ def _perf_load_env_report(python_executable: str, env_name: str, saved_python: s
     )
 
 
-def _perf_load_runs_snapshot(runs_root: str):
+def _perf_load_runs_snapshot(runs_root: str, **_kwargs):
     return RunsManager(Path(runs_root)).list_runs()
 
 
