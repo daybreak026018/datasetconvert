@@ -12,7 +12,7 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -555,14 +555,16 @@ class RunsManager:
     def __init__(self, root: Path):
         self.root = Path(root)
 
-    def list_runs(self) -> List[Dict[str, str]]:
+    def list_runs(self) -> List[Dict[str, Any]]:
         runs = []
         if not self.root.exists():
             return runs
         for path in sorted([p for p in self.root.rglob("*") if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True):
             best = path / "weights" / "best.pt"
             last = path / "weights" / "last.pt"
-            if best.exists() or last.exists() or any(path.glob("*.jpg")) or any(path.glob("*.png")):
+            curve = self._find_curve_image(path)
+            preview_images = self._find_preview_images(path)
+            if best.exists() or last.exists() or curve or preview_images:
                 runs.append(
                     {
                         "name": path.name,
@@ -570,6 +572,8 @@ class RunsManager:
                         "type": self._guess_type(path),
                         "best": str(best) if best.exists() else "",
                         "last": str(last) if last.exists() else "",
+                        "curve": str(curve) if curve else "",
+                        "preview_images": [str(item) for item in preview_images],
                         "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
                     }
                 )
@@ -587,6 +591,26 @@ class RunsManager:
         records.insert(0, record)
         target.write_text(json.dumps(records[:50], ensure_ascii=False, indent=2), encoding="utf-8")
         return target
+
+    def _find_curve_image(self, path: Path) -> Optional[Path]:
+        for name in ("results.png", "results.jpg", "results.jpeg"):
+            candidate = path / name
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _find_preview_images(self, path: Path) -> List[Path]:
+        image_files = []
+        for candidate in path.rglob("*"):
+            if not candidate.is_file():
+                continue
+            if candidate.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            if "weights" in candidate.parts:
+                continue
+            image_files.append(candidate)
+        image_files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+        return image_files[:24]
 
     def _guess_type(self, path: Path) -> str:
         lowered = str(path).lower()

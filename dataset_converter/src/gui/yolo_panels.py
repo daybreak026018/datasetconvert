@@ -11,8 +11,8 @@ from pathlib import Path
 
 import yaml
 
-from PyQt5.QtCore import QProcess, QProcessEnvironment, QSettings, Qt
-from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import QProcess, QProcessEnvironment, QSettings, QSize, Qt
+from PyQt5.QtGui import QDesktopServices, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -160,6 +161,44 @@ class YOLOBasePanel(QWidget):
         path = Path(path_text)
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+
+class ImagePreviewList(QListWidget):
+    def __init__(self, empty_text: str, icon_size: int = 152, parent=None):
+        super().__init__(parent)
+        self.empty_text = empty_text
+        self.icon_edge = icon_size
+        self.setViewMode(QListWidget.IconMode)
+        self.setResizeMode(QListWidget.Adjust)
+        self.setMovement(QListWidget.Static)
+        self.setSpacing(10)
+        self.setIconSize(QSize(icon_size, icon_size))
+        self.setMinimumHeight(icon_size + 52)
+        self.setWordWrap(True)
+
+    def set_images(self, paths):
+        self.clear()
+        valid_paths = [Path(path) for path in paths if path and Path(path).exists()]
+        if not valid_paths:
+            item = QListWidgetItem(self.empty_text)
+            item.setFlags(Qt.NoItemFlags)
+            self.addItem(item)
+            return
+        for path in valid_paths:
+            pixmap = QPixmap(str(path))
+            if pixmap.isNull():
+                continue
+            icon = pixmap.scaled(
+                self.icon_edge,
+                self.icon_edge,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            item = QListWidgetItem(path.name)
+            item.setToolTip(str(path))
+            item.setData(Qt.UserRole, str(path))
+            item.setIcon(QIcon(icon))
+            self.addItem(item)
 
 
 class YOLOHomePanel(YOLOBasePanel):
@@ -867,6 +906,7 @@ class YOLOProcessPanel(YOLOBasePanel):
 class YOLOTrainingPanel(YOLOProcessPanel):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.runs_manager = RunsManager(Path.cwd() / "runs")
         self._build_ui()
 
     def _build_ui(self):
@@ -952,6 +992,21 @@ class YOLOTrainingPanel(YOLOProcessPanel):
         self.log.setMinimumHeight(220)
         root.addWidget(self.log)
 
+        preview_group = QGroupBox("训练曲线预览")
+        preview_layout = QVBoxLayout(preview_group)
+        preview_layout.setContentsMargins(12, 16, 12, 12)
+        self.curve_hint = QLabel("训练完成后自动显示最近一次训练曲线。")
+        self.curve_hint.setWordWrap(True)
+        preview_layout.addWidget(self.curve_hint)
+        self.curve_preview = QLabel("暂无曲线图")
+        self.curve_preview.setAlignment(Qt.AlignCenter)
+        self.curve_preview.setMinimumHeight(220)
+        self.curve_preview.setObjectName("curvePreview")
+        preview_layout.addWidget(self.curve_preview)
+        root.addWidget(preview_group)
+
+        self.refresh_curve_preview()
+
     def _spin(self, min_value, max_value, value):
         spin = QSpinBox()
         spin.setRange(min_value, max_value)
@@ -1009,12 +1064,40 @@ class YOLOTrainingPanel(YOLOProcessPanel):
             resume=self.resume_check.isChecked(),
             python_executable=self._selected_python(),
         )
+        self._set_curve_preview(None)
         self._start_process(YOLOCommandBuilder.build_train(cfg), Path.cwd())
+
+    def _finished(self, exit_code, exit_status):
+        super()._finished(exit_code, exit_status)
+        self.refresh_curve_preview()
+
+    def refresh_curve_preview(self):
+        train_runs = [item for item in self.runs_manager.list_runs() if "train" in item["path"].lower()]
+        latest = train_runs[0] if train_runs else None
+        curve_path = Path(latest["curve"]) if latest and latest.get("curve") else None
+        self._set_curve_preview(curve_path)
+        if latest:
+            self.curve_hint.setText(f"最近训练: {latest['name']} | {latest['modified']}")
+
+    def _set_curve_preview(self, curve_path):
+        if not curve_path or not Path(curve_path).exists():
+            self.curve_preview.setPixmap(QPixmap())
+            self.curve_preview.setText("暂无曲线图")
+            return
+        pixmap = QPixmap(str(curve_path))
+        if pixmap.isNull():
+            self.curve_preview.setPixmap(QPixmap())
+            self.curve_preview.setText("曲线图读取失败")
+            return
+        scaled = pixmap.scaled(680, 240, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.curve_preview.setPixmap(scaled)
+        self.curve_preview.setText("")
 
 
 class YOLOPredictPanel(YOLOProcessPanel):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.runs_manager = RunsManager(Path.cwd() / "runs")
         self._build_ui()
 
     def _build_ui(self):
@@ -1080,6 +1163,19 @@ class YOLOPredictPanel(YOLOProcessPanel):
         self.log.setMinimumHeight(220)
         root.addWidget(self.log)
 
+        preview_group = QGroupBox("检测结果缩略图")
+        preview_layout = QVBoxLayout(preview_group)
+        preview_layout.setContentsMargins(12, 16, 12, 12)
+        self.preview_hint = QLabel("检测完成后自动显示最近一次检测结果缩略图。")
+        self.preview_hint.setWordWrap(True)
+        preview_layout.addWidget(self.preview_hint)
+        self.preview_list = ImagePreviewList("暂无检测结果缩略图", icon_size=144)
+        self.preview_list.itemDoubleClicked.connect(self._open_preview_item)
+        preview_layout.addWidget(self.preview_list)
+        root.addWidget(preview_group)
+
+        self.refresh_prediction_preview()
+
     def _double_spin(self, min_value, max_value, value):
         spin = QDoubleSpinBox()
         spin.setRange(min_value, max_value)
@@ -1123,7 +1219,28 @@ class YOLOPredictPanel(YOLOProcessPanel):
             output_dir=self.output_edit.text(),
             python_executable=self._selected_python(),
         )
+        self.preview_list.set_images([])
         self._start_process(YOLOCommandBuilder.build_predict(cfg), Path.cwd())
+
+    def _finished(self, exit_code, exit_status):
+        super()._finished(exit_code, exit_status)
+        self.refresh_prediction_preview()
+
+    def set_model_path(self, path_text: str):
+        self.model_edit.setText(path_text)
+
+    def refresh_prediction_preview(self):
+        predict_runs = [item for item in self.runs_manager.list_runs() if "predict" in item["path"].lower()]
+        latest = predict_runs[0] if predict_runs else None
+        preview_images = latest.get("preview_images", []) if latest else []
+        self.preview_list.set_images(preview_images)
+        if latest:
+            self.preview_hint.setText(f"最近检测: {latest['name']} | {latest['modified']} | 双击缩略图可打开原图")
+
+    def _open_preview_item(self, item):
+        path_text = item.data(Qt.UserRole)
+        if path_text:
+            self._open_path(path_text)
 
 
 class YOLORunsPanel(YOLOBasePanel):
@@ -1220,3 +1337,169 @@ class YOLOSettingsPanel(YOLOBasePanel):
         )
         root.addWidget(info)
         root.addStretch()
+
+
+_LegacyYOLOTrainingPanel = YOLOTrainingPanel
+
+
+class YOLOTrainingPanel(_LegacyYOLOTrainingPanel):
+    def refresh_curve_preview(self):
+        train_runs = [item for item in self.runs_manager.list_runs() if "train" in item["path"].lower()]
+        latest = train_runs[0] if train_runs else None
+        curve_path = Path(latest["curve"]) if latest and latest.get("curve") else None
+        self._set_curve_preview(curve_path)
+        if latest:
+            self.curve_hint.setText(f"最近训练: {latest['name']} | {latest['modified']}")
+        else:
+            self.curve_hint.setText("训练完成后自动显示最近一次训练曲线。")
+
+
+_LegacyYOLOPredictPanel = YOLOPredictPanel
+
+
+class YOLOPredictPanel(_LegacyYOLOPredictPanel):
+    def refresh_prediction_preview(self):
+        predict_runs = [item for item in self.runs_manager.list_runs() if "predict" in item["path"].lower()]
+        latest = predict_runs[0] if predict_runs else None
+        preview_images = latest.get("preview_images", []) if latest else []
+        self.preview_list.set_images(preview_images)
+        if latest:
+            self.preview_hint.setText(f"最近检测: {latest['name']} | {latest['modified']} | 双击缩略图可打开原图")
+        else:
+            self.preview_hint.setText("检测完成后自动显示最近一次检测结果缩略图。")
+
+
+_LegacyYOLORunsPanel = YOLORunsPanel
+
+
+class YOLORunsPanel(YOLOBasePanel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.runs_root = Path.cwd() / "runs"
+        self.runs = []
+        self._build_ui()
+        self.refresh()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(12)
+
+        banner = QLabel("结果管理：集中查看训练曲线、检测缩略图和权重文件。")
+        banner.setObjectName("banner")
+        banner.setWordWrap(True)
+        root.addWidget(banner)
+
+        actions = QHBoxLayout()
+        actions.addWidget(_button("刷新", self.refresh, "success"))
+        actions.addWidget(_button("打开选中目录", self.open_selected))
+        actions.addWidget(_button("复制 best.pt 路径", self.copy_best))
+        actions.addWidget(_button("权重带入检测页", self.send_best_to_predict, "primary"))
+        actions.addStretch()
+        root.addLayout(actions)
+
+        self.list_widget = QListWidget()
+        self.list_widget.currentRowChanged.connect(self.show_detail)
+        root.addWidget(self.list_widget, 1)
+
+        self.detail = QPlainTextEdit()
+        self.detail.setReadOnly(True)
+        self.detail.setMinimumHeight(120)
+        root.addWidget(self.detail)
+
+        self.curve_preview = QLabel("暂无训练曲线")
+        self.curve_preview.setAlignment(Qt.AlignCenter)
+        self.curve_preview.setMinimumHeight(200)
+        self.curve_preview.setObjectName("curvePreview")
+        root.addWidget(self.curve_preview)
+
+        self.preview_list = ImagePreviewList("暂无结果缩略图", icon_size=128)
+        self.preview_list.itemDoubleClicked.connect(self._open_preview_item)
+        root.addWidget(self.preview_list)
+
+    def refresh(self):
+        self.runs = RunsManager(self.runs_root).list_runs()
+        self.list_widget.clear()
+        for item in self.runs:
+            self.list_widget.addItem(f"[{self._display_type(item)}] {item['modified']}  {item['path']}")
+        self.detail.setPlainText(f"共发现 {len(self.runs)} 个结果。")
+        self.curve_preview.setPixmap(QPixmap())
+        self.curve_preview.setText("暂无训练曲线")
+        self.preview_list.set_images([])
+        if self.runs:
+            self.list_widget.setCurrentRow(0)
+
+    def show_detail(self, index):
+        if index < 0 or index >= len(self.runs):
+            return
+        item = self.runs[index]
+        self.detail.setPlainText(
+            "\n".join(
+                [
+                    f"类型: {self._display_type(item)}",
+                    f"目录: {item['path']}",
+                    f"best.pt: {item['best'] or '无'}",
+                    f"last.pt: {item['last'] or '无'}",
+                    f"曲线图: {item.get('curve') or '无'}",
+                    f"更新时间: {item['modified']}",
+                ]
+            )
+        )
+        self._set_curve_preview(item.get("curve"))
+        self.preview_list.set_images(item.get("preview_images", []))
+
+    def open_selected(self):
+        index = self.list_widget.currentRow()
+        if 0 <= index < len(self.runs):
+            self._open_path(self.runs[index]["path"])
+
+    def copy_best(self):
+        index = self.list_widget.currentRow()
+        if 0 <= index < len(self.runs) and self.runs[index]["best"]:
+            from PyQt5.QtWidgets import QApplication
+
+            QApplication.clipboard().setText(self.runs[index]["best"])
+            QMessageBox.information(self, "完成", "best.pt 路径已复制。")
+
+    def send_best_to_predict(self):
+        index = self.list_widget.currentRow()
+        if not (0 <= index < len(self.runs)):
+            return
+        best_path = self.runs[index].get("best", "")
+        if not best_path:
+            QMessageBox.warning(self, "提示", "当前结果没有 best.pt。")
+            return
+        home = self.window()
+        predict_panel = getattr(home, "panels", [None] * 5)[4] if hasattr(home, "panels") and len(home.panels) > 4 else None
+        if predict_panel and hasattr(predict_panel, "set_model_path"):
+            predict_panel.set_model_path(best_path)
+            if hasattr(home, "switch_panel"):
+                home.switch_panel(4)
+            QMessageBox.information(self, "完成", "已将权重带入检测页。")
+
+    def _set_curve_preview(self, curve_path):
+        if not curve_path or not Path(curve_path).exists():
+            self.curve_preview.setPixmap(QPixmap())
+            self.curve_preview.setText("暂无训练曲线")
+            return
+        pixmap = QPixmap(str(curve_path))
+        if pixmap.isNull():
+            self.curve_preview.setPixmap(QPixmap())
+            self.curve_preview.setText("训练曲线读取失败")
+            return
+        scaled = pixmap.scaled(680, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.curve_preview.setPixmap(scaled)
+        self.curve_preview.setText("")
+
+    def _open_preview_item(self, item):
+        path_text = item.data(Qt.UserRole)
+        if path_text:
+            self._open_path(path_text)
+
+    def _display_type(self, item):
+        lowered = item["path"].lower()
+        if "predict" in lowered:
+            return "检测"
+        if "train" in lowered:
+            return "训练"
+        return "结果"
