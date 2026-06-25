@@ -32,9 +32,9 @@ class ThemeManager(QObject):
 
     def _load_themes(self) -> Dict[str, Dict[str, Any]]:
         base_fonts = {
-            "family": "Microsoft YaHei, Segoe UI, sans-serif",
-            "size_small": 10,
-            "size_normal": 12,
+            "family": '"Microsoft YaHei UI", "Segoe UI", "Microsoft YaHei"',
+            "size_small": 11,
+            "size_normal": 13,
             "size_large": 14,
             "size_title": 16,
         }

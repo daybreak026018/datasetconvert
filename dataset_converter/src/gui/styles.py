@@ -29,7 +29,7 @@ class AppStyles:
         return f"""
         QMainWindow {{
             background-color: {AppStyles.BACKGROUND_COLOR};
-            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-family: "Microsoft YaHei UI", "Segoe UI", "Microsoft YaHei";
         }}
 
         QFrame#sidebar {{
@@ -80,7 +80,7 @@ class AppStyles:
 
         QLabel[class="navText"] {{
             color: {AppStyles.SIDEBAR_TEXT};
-            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-family: "Microsoft YaHei UI", "Segoe UI", "Microsoft YaHei";
             font-size: 14px;
             font-weight: 500;
         }}
@@ -111,8 +111,8 @@ class AppStyles:
         QWidget {{
             background-color: {AppStyles.BACKGROUND_COLOR};
             color: {AppStyles.TEXT_COLOR};
-            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-            font-size: 12px;
+            font-family: "Microsoft YaHei UI", "Segoe UI", "Microsoft YaHei";
+            font-size: 13px;
         }}
 
         QGroupBox {{

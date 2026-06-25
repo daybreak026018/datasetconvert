@@ -162,6 +162,13 @@ class YOLOBasePanel(QWidget):
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
+    def _default_output_root(self) -> Path:
+        settings = QSettings("DataForge", "YOLOStudio")
+        saved = settings.value("default_output_dir", "")
+        if saved:
+            return Path(saved)
+        return Path.cwd() / "runs"
+
 
 class ImagePreviewList(QListWidget):
     def __init__(self, empty_text: str, icon_size: int = 152, parent=None):
@@ -1511,3 +1518,235 @@ class YOLORunsPanel(YOLOBasePanel):
         if "train" in lowered:
             return "训练"
         return "结果"
+
+_LegacyPanelHome = YOLOHomePanel
+_LegacyPanelData = YOLODataPanel
+_LegacyPanelTraining = YOLOTrainingPanel
+_LegacyPanelPredict = YOLOPredictPanel
+_LegacyPanelRuns = YOLORunsPanel
+_LegacyPanelSettings = YOLOSettingsPanel
+
+
+class YOLOProcessPanel(YOLOProcessPanel):
+    def refresh_env_display(self):
+        if hasattr(self, "env_edit"):
+            self.env_edit.setText(self._selected_env_label())
+
+
+class YOLOHomePanel(_LegacyPanelHome):
+    def __init__(self, parent=None):
+        self.settings = QSettings("DataForge", "YOLOStudio")
+        super().__init__(parent)
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(12)
+
+        banner = QLabel("YOLO Studio 将数据准备、环境检测、训练、检测与结果管理集中到一条工作流。")
+        banner.setObjectName("banner")
+        banner.setWordWrap(True)
+        root.addWidget(banner)
+
+        self.metrics = {}
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(10)
+        metrics.setVerticalSpacing(10)
+        for index, key in enumerate(["环境状态", "当前环境", "最近训练", "最近检测"]):
+            card, label = self._metric_card(key, "-")
+            self.metrics[key] = label
+            metrics.addWidget(card, index // 2, index % 2)
+        root.addLayout(metrics)
+
+        action_group = QGroupBox("快捷入口")
+        actions = QHBoxLayout(action_group)
+        actions.setContentsMargins(12, 16, 12, 12)
+        actions.setSpacing(8)
+        actions.addWidget(_button("刷新总览", self.refresh, "success"))
+        actions.addWidget(_button("打开输出目录", lambda: self._open_path(str(self._default_output_root()))))
+        actions.addStretch()
+        root.addWidget(action_group)
+
+        self.summary = QPlainTextEdit()
+        self.summary.setReadOnly(True)
+        self.summary.setMinimumHeight(160)
+        root.addWidget(self.summary)
+        root.addStretch()
+
+    def refresh(self):
+        selected_python = self.settings.value("selected_python", "")
+        selected_env_name = self.settings.value("selected_env_name", "当前Python")
+        report = EnvironmentChecker.check(selected_python, selected_env_name)
+        runs_root = self._default_output_root()
+        runs = RunsManager(runs_root).list_runs()
+        train_runs = [item for item in runs if "train" in item["path"].lower()]
+        predict_runs = [item for item in runs if "predict" in item["path"].lower()]
+        weights = [item for item in runs if item.get("best") or item.get("last")]
+
+        self.metrics["环境状态"].setText(report.status)
+        self.metrics["当前环境"].setText(selected_env_name)
+        self.metrics["最近训练"].setText(train_runs[0]["name"] if train_runs else "暂无")
+        self.metrics["最近检测"].setText(predict_runs[0]["name"] if predict_runs else "暂无")
+
+        self.summary.setPlainText(
+            "\n".join(
+                [
+                    f"默认输出目录: {runs_root}",
+                    f"训练/检测环境: {selected_env_name}",
+                    f"Python: {report.python_version}",
+                    f"PyTorch: {report.torch_version}",
+                    f"CUDA: {report.cuda_version or '未检测到'}",
+                    f"GPU: {report.gpu_name or '无'}",
+                    f"可用权重: {len(weights)}",
+                    f"Ultralytics: {report.ultralytics_version or '未安装'}",
+                ]
+            )
+        )
+
+
+class YOLODataPanel(_LegacyPanelData):
+    def _build_ui(self):
+        super()._build_ui()
+        if hasattr(self, "tabs") and self.tabs.count() > 0:
+            self.tabs.setTabText(0, "数据集准备")
+
+
+class YOLOTrainingPanel(_LegacyPanelTraining):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.refresh_output_root()
+        self.refresh_env_display()
+
+    def refresh_output_root(self):
+        self.project_edit.setText(str(self._default_output_root() / "train"))
+
+    def refresh_env_display(self):
+        if hasattr(self, "env_edit"):
+            self.env_edit.setText(self._selected_env_label())
+
+
+class YOLOPredictPanel(_LegacyPanelPredict):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.refresh_output_root()
+        self.refresh_env_display()
+
+    def refresh_output_root(self):
+        self.output_edit.setText(str(self._default_output_root() / "predict"))
+
+    def refresh_env_display(self):
+        if hasattr(self, "env_edit"):
+            self.env_edit.setText(self._selected_env_label())
+
+
+class YOLORunsPanel(_LegacyPanelRuns):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.refresh_output_root()
+
+    def refresh_output_root(self):
+        self.runs_root = self._default_output_root()
+        self.refresh()
+        home = self.window()
+        if hasattr(home, "panels"):
+            for panel in home.panels:
+                if hasattr(panel, "refresh_env_display"):
+                    panel.refresh_env_display()
+                if hasattr(panel, "refresh") and panel.__class__.__name__ == "YOLOHomePanel":
+                    panel.refresh()
+
+
+class YOLOSettingsPanel(YOLOBasePanel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.settings = QSettings("DataForge", "YOLOStudio")
+        self._build_ui()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(12)
+
+        banner = QLabel("在这里修改 YOLO Studio 的默认输出目录，训练、检测和结果管理会自动跟随。")
+        banner.setObjectName("banner")
+        banner.setWordWrap(True)
+        root.addWidget(banner)
+
+        group = QGroupBox("默认输出")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(8)
+
+        self.output_root_edit = QLineEdit(str(self._default_output_root()))
+        layout.addLayout(_path_row("输出目录", self.output_root_edit, _button("选择", self.choose_output_root)))
+
+        actions = QHBoxLayout()
+        actions.addWidget(_button("保存输出目录", self.save_output_root, "success"))
+        actions.addWidget(_button("打开目录", lambda: self._open_path(self.output_root_edit.text())))
+        actions.addStretch()
+        layout.addLayout(actions)
+        root.addWidget(group)
+
+        info = QPlainTextEdit()
+        info.setReadOnly(True)
+        info.setPlainText(
+            "说明:\n"
+            "1. 这里保存的是软件统一的默认输出根目录。\n"
+            "2. 训练默认落到 runs/train。\n"
+            "3. 检测默认落到 runs/predict。\n"
+            "4. 保存后首页、训练页、检测页和结果管理会同步刷新。"
+        )
+        root.addWidget(info)
+        root.addStretch()
+
+    def choose_output_root(self):
+        path = QFileDialog.getExistingDirectory(self, "选择默认输出目录", str(self._default_output_root()))
+        if path:
+            self.output_root_edit.setText(path)
+
+    def save_output_root(self):
+        path_text = self.output_root_edit.text().strip()
+        if not path_text:
+            QMessageBox.warning(self, "提示", "请输入有效的输出目录。")
+            return
+
+        output_root = Path(path_text)
+        output_root.mkdir(parents=True, exist_ok=True)
+        self.settings.setValue("default_output_dir", str(output_root))
+
+        home = self.window()
+        if hasattr(home, "panels"):
+            for panel in home.panels:
+                if hasattr(panel, "refresh_output_root"):
+                    panel.refresh_output_root()
+                if hasattr(panel, "refresh_env_display"):
+                    panel.refresh_env_display()
+                if hasattr(panel, "refresh") and panel.__class__.__name__ == "YOLOHomePanel":
+                    panel.refresh()
+
+        QMessageBox.information(self, "完成", "默认输出目录已更新，并已同步到训练、检测和结果页面。")
+
+    def apply_theme(self):
+        self.setStyleSheet(
+            """
+            QLabel#banner {
+                background-color: #edf5ff;
+                border: 1px solid #c8dcf8;
+                border-radius: 14px;
+                padding: 12px 16px;
+                color: #20456d;
+            }
+
+            QGroupBox {
+                margin-top: 16px;
+                padding-top: 18px;
+            }
+
+            QLineEdit {
+                border: 1px solid #dbe7f6;
+                border-radius: 12px;
+                background-color: #fbfdff;
+                padding: 10px 12px;
+            }
+            """
+        )

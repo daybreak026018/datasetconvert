@@ -1,5 +1,5 @@
 """
-Responsive blue-and-white main window shell for DataForge.
+Responsive blue-and-white main window shell for DataForge YOLO Studio.
 """
 
 from pathlib import Path
@@ -34,9 +34,9 @@ class NavCard(QFrame):
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setFixedHeight(64)
 
-        self.layout_ref = QVBoxLayout(self)
-        self.layout_ref.setContentsMargins(12, 8, 12, 8)
-        self.layout_ref.setSpacing(2)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(2)
 
         self.title_label = QLabel(title)
         self.title_label.setObjectName("navTitle")
@@ -45,8 +45,8 @@ class NavCard(QFrame):
         self.subtitle_label.setObjectName("navSubtitle")
         self.subtitle_label.setWordWrap(True)
 
-        self.layout_ref.addWidget(self.title_label)
-        self.layout_ref.addWidget(self.subtitle_label)
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.subtitle_label)
 
     def set_selected(self, selected: bool):
         self.setProperty("selected", "true" if selected else "false")
@@ -63,13 +63,13 @@ class SimpleHomeWindow(QMainWindow):
     """Single-palette blue shell around the tool panels."""
 
     NAV_ITEMS = [
-        ("YOLO首页", "环境、训练、检测和结果概览"),
-        ("数据准备", "YOLO 数据集扫描与 data.yaml 生成"),
-        ("环境检测", "Python、PyTorch、CUDA 与 Ultralytics 状态"),
-        ("模型训练", "本机一键启动 YOLO 训练"),
-        ("模型检测", "选择权重进行图片、视频或目录检测"),
-        ("结果管理", "查看 runs、权重和预测输出"),
-        ("设置", "YOLO Studio 偏好与说明"),
+        ("总览", "查看环境、最近训练、最近检测和输出目录"),
+        ("数据准备", "数据集准备、转换、划分与完整性检查"),
+        ("环境检测", "Python、PyTorch、CUDA 和 Conda 环境管理"),
+        ("模型训练", "选择 YOLO 版本并启动训练"),
+        ("模型检测", "选择权重并进行推理检测"),
+        ("结果管理", "集中查看 runs、权重和结果预览"),
+        ("设置", "修改默认输出目录和基础偏好"),
     ]
 
     def __init__(self):
@@ -85,7 +85,6 @@ class SimpleHomeWindow(QMainWindow):
         self.switch_panel(0)
 
     def _sync_app_styles(self):
-        """Mirror the blue palette into shared style constants."""
         colors = theme_manager.get_theme_config("light")["colors"]
         AppStyles.PRIMARY_COLOR = colors["primary"]
         AppStyles.SUCCESS_COLOR = colors["success"]
@@ -144,7 +143,6 @@ class SimpleHomeWindow(QMainWindow):
             card.clicked.connect(self.switch_panel)
             self.nav_cards.append(card)
             self.nav_layout.addWidget(card)
-
         self.nav_layout.addStretch()
 
         self.nav_scroll = QScrollArea()
@@ -154,7 +152,6 @@ class SimpleHomeWindow(QMainWindow):
         self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.nav_scroll.setWidget(nav_container)
         self.sidebar_layout.addWidget(self.nav_scroll, 1)
-
         root_layout.addWidget(self.sidebar)
 
         self.content_wrap = QFrame()
@@ -169,12 +166,11 @@ class SimpleHomeWindow(QMainWindow):
         self.header_layout.setContentsMargins(18, 14, 18, 14)
         self.header_layout.setSpacing(4)
 
-        self.page_title = QLabel("YOLO首页")
+        self.page_title = QLabel("总览")
         self.page_title.setObjectName("pageTitle")
-        self.page_desc = QLabel("环境、训练、检测和结果概览")
+        self.page_desc = QLabel("查看环境、训练、检测与输出结果的整体状态")
         self.page_desc.setObjectName("pageDesc")
         self.page_desc.setWordWrap(True)
-
         self.header_layout.addWidget(self.page_title)
         self.header_layout.addWidget(self.page_desc)
         self.content_layout.addWidget(self.header_card)
@@ -242,6 +238,10 @@ class SimpleHomeWindow(QMainWindow):
         current_panel = self.panels[index]
         if hasattr(current_panel, "apply_theme"):
             current_panel.apply_theme()
+        if hasattr(current_panel, "refresh"):
+            current_panel.refresh()
+        if hasattr(current_panel, "refresh_output_root"):
+            current_panel.refresh_output_root()
 
     def _apply_shell_style(self):
         blue_base = theme_manager.generate_stylesheet("light")
@@ -260,10 +260,6 @@ class SimpleHomeWindow(QMainWindow):
             background-color: #ffffff;
             border: 1px solid #d5e2f2;
             border-radius: 12px;
-        }
-
-        QFrame#stackCard {
-            background-color: #ffffff;
         }
 
         QLabel#pageDesc {

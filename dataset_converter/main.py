@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import QApplication
 
 from src.gui.simple_home_window import SimpleHomeWindow
@@ -62,6 +62,14 @@ def _apply_windows_taskbar_icon(window, icon_path: Path):
         pass
 
 
+def _build_app_font():
+    font = QFont("Microsoft YaHei UI", 10)
+    font.setStyleStrategy(QFont.PreferAntialias)
+    if hasattr(QFont, "PreferFullHinting"):
+        font.setHintingPreference(QFont.PreferFullHinting)
+    return font
+
+
 def main():
     ensure_data_dirs()
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
@@ -76,6 +84,7 @@ def main():
             pass
 
     app = QApplication(sys.argv)
+    app.setFont(_build_app_font())
 
     icon_root = Path(__file__).resolve().parents[1] / "assets"
     icon_path = icon_root / "logo.ico"
